@@ -1,0 +1,24 @@
+name: "Yeti Benchmarks"
+app_id: "app-benchmarks"
+version: "0.1.0"
+require_super_user: true
+
+static_files:
+  path: web
+  route: /
+  index: index.html
+
+schemas:
+  - schema.graphql
+
+resources:
+  - "resources/*.rs"
+
+binaries:
+  - "bin/*.rs"
+
+modules:
+  - "modules/*.rs"
+
+auth:
+  methods: [jwt, oauth]

@@ -1,0 +1,247 @@
+//! load-vector benchmark — extracted from bin/load_vector.rs for embedding in yeti CLI.
+
+use crate::{
+    common::LoadTestConfig, common::ReportContext, common::clear_tables,
+    cli::{BenchArgs, write_phase},
+    client, reporter, runner, common::validate_error_rate,
+};
+use std::time::Duration;
+use uuid::Uuid;
+
+const SAMPLE_TOPICS: &[&str] = &[
+    "technology innovation artificial intelligence",
+    "climate change renewable energy sustainability",
+    "space exploration mars colonization",
+    "quantum computing breakthroughs",
+    "biotechnology gene editing crispr",
+    "ocean conservation marine biology",
+    "autonomous vehicles self driving cars",
+    "blockchain decentralized finance",
+    "neuroscience brain computer interfaces",
+    "cybersecurity threat detection",
+];
+
+/// Simple percent-encoding for query params.
+fn urlencoding(s: String) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            },
+            _ => {
+                out.push_str(&format!("%{:02X}", b));
+            },
+        }
+    }
+    out
+}
+
+pub async fn run(args: BenchArgs) {
+    crate::common::init_tracing();
+    let (auth_user, auth_pass) = args.auth_parts();
+    let auth_user = auth_user.to_string();
+    let auth_pass = auth_pass.to_string();
+    let client = client::build_client();
+    let duration = Duration::from_secs(args.duration);
+    let warmup = Duration::from_secs(args.warmup);
+
+    tracing::info!(
+        "load-vector: test={}, duration={}s, warmup={}s, vus={}, base={}",
+        args.test,
+        args.duration,
+        args.warmup,
+        args.vus,
+        args.base_url
+    );
+
+    match args.test.as_str() {
+        "vector-embed" => {
+            write_phase(&args, "seeding");
+            tracing::info!("Clearing Article table...");
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &["Article"],
+            )
+            .await;
+
+            write_phase(&args, "warming");
+            let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
+                args.vus,
+                duration,
+                warmup,
+                LoadTestConfig {
+                    client: client.clone(),
+                    base_url: args.base_url.clone(),
+                    auth_user: auth_user.clone(),
+                    auth_pass: auth_pass.clone(),
+                },
+                |ctx| async move {
+                    let id = Uuid::new_v4().to_string();
+                    let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
+                    let body = serde_json::json!({
+                        "id": id,
+                        "title": format!("Vector Article {}", &id[..8]),
+                        "author": "Benchmark",
+                        "category": "benchmark",
+                        "content": format!(
+                            "This article explores {}. Generated for benchmark testing with unique content to trigger embedding computation. ID: {}",
+                            SAMPLE_TOPICS[topic_idx], id
+                        ),
+                    });
+                    let url = format!("{}/app-benchmarks/Article/", ctx.base_url);
+                    let start = std::time::Instant::now();
+                    let result = ctx
+                        .client
+                        .post(&url)
+                        .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                        .json(&body)
+                        .send()
+                        .await;
+                    ctx.record_response(start, result).await;
+                },
+            )
+            .await;
+
+            let summary = metrics.summary(elapsed);
+            validate_error_rate(&summary);
+            let rctx = ReportContext {
+                client: &client,
+                base_url: &args.base_url,
+                auth_user: &auth_user,
+                auth_pass: &auth_pass,
+            };
+            reporter::report_results_with_snapshots(
+                &rctx,
+                "vector-embed",
+                elapsed,
+                &summary,
+                &snapshots,
+                args.vus,
+            )
+            .await;
+
+            write_phase(&args, "cleaning");
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &["Article"],
+            )
+            .await;
+        },
+        "vector-search" => {
+            write_phase(&args, "seeding");
+            tracing::info!("Seeding 50 Articles for vector search...");
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &["Article"],
+            )
+            .await;
+            for i in 0..50 {
+                let id = Uuid::new_v4().to_string();
+                let topic_idx = i % SAMPLE_TOPICS.len();
+                let body = serde_json::json!({
+                    "id": id,
+                    "title": format!("Seed Article {}", i),
+                    "author": "Benchmark",
+                    "category": "benchmark",
+                    "content": format!(
+                        "This article explores {}. Seed content for vector search benchmarking. ID: {}",
+                        SAMPLE_TOPICS[topic_idx], id
+                    ),
+                });
+                let url = format!("{}/app-benchmarks/Article/", args.base_url);
+                let _ = client
+                    .post(&url)
+                    .basic_auth(&auth_user, Some(&auth_pass))
+                    .json(&body)
+                    .send()
+                    .await;
+            }
+            tracing::info!("Waiting for embeddings to process...");
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            write_phase(&args, "warming");
+            let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
+                args.vus,
+                duration,
+                warmup,
+                LoadTestConfig {
+                    client: client.clone(),
+                    base_url: args.base_url.clone(),
+                    auth_user: auth_user.clone(),
+                    auth_pass: auth_pass.clone(),
+                },
+                |ctx| async move {
+                    let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
+                    let query = serde_json::json!({
+                        "conditions": [{
+                            "field": "embedding",
+                            "op": "vector",
+                            "value": SAMPLE_TOPICS[topic_idx]
+                        }],
+                        "limit": 10
+                    });
+                    let url = format!(
+                        "{}/app-benchmarks/Article/?query={}",
+                        ctx.base_url,
+                        urlencoding(query.to_string())
+                    );
+                    let start = std::time::Instant::now();
+                    let result = ctx
+                        .client
+                        .get(&url)
+                        .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                        .send()
+                        .await;
+                    ctx.record_response(start, result).await;
+                },
+            )
+            .await;
+
+            let summary = metrics.summary(elapsed);
+            validate_error_rate(&summary);
+            let rctx = ReportContext {
+                client: &client,
+                base_url: &args.base_url,
+                auth_user: &auth_user,
+                auth_pass: &auth_pass,
+            };
+            reporter::report_results_with_snapshots(
+                &rctx,
+                "vector-search",
+                elapsed,
+                &summary,
+                &snapshots,
+                args.vus,
+            )
+            .await;
+
+            write_phase(&args, "cleaning");
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &["Article"],
+            )
+            .await;
+        },
+        other => {
+            tracing::error!("Unknown test for load-vector: {}", other);
+            std::process::exit(1);
+        },
+    }
+}
