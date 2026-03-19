@@ -114,7 +114,7 @@ fn find_binary(binary_name: &str) -> Option<String> {
     let root = get_root_directory();
 
     // Shared build cache (plugin compiler output — binaries built alongside dylib)
-    for profile in &["debug", "release"] {
+    for profile in &["release", "debug"] {
         let path = root.join("cache/builds/target").join(profile).join(binary_name);
         if path.exists() {
             return Some(path.to_string_lossy().to_string());
@@ -123,7 +123,7 @@ fn find_binary(binary_name: &str) -> Option<String> {
 
     // App's own target directory (standalone cargo build)
     let app_dir = get_apps_directory().join("app-benchmarks");
-    for profile in &["release", "debug"] {
+    for profile in &["release", "debug"] {  // prefer release
         let path = app_dir.join("target").join(profile).join(binary_name);
         if path.exists() {
             return Some(path.to_string_lossy().to_string());
@@ -180,55 +180,76 @@ resource!(BenchmarkRunner {
             }
 
             if should_idle {
+                // Check if the child's last phase was "cleaning" — show it for one cycle
+                let show_cleaning = {
+                    let s = runner_state().lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(ref path) = s.status_file {
+                        std::fs::read_to_string(path).ok()
+                            .map(|p| p.trim() == "cleaning" && s.status != "cleaning")
+                            .unwrap_or(false)
+                    } else { false }
+                };
+
                 let mut s = runner_state().lock().unwrap_or_else(|e| e.into_inner());
-                s.status = "idle".to_string();
-                s.child_pid = None;
-                s.warming_started_at = None;
-                if let Some(ref path) = s.status_file {
-                    let _ = std::fs::remove_file(path);
+                if show_cleaning {
+                    s.status = "cleaning".to_string();
+                    s.child_pid = None;
+                } else {
+                    s.status = "idle".to_string();
+                    s.child_pid = None;
+                    s.warming_started_at = None;
+                    if let Some(ref path) = s.status_file {
+                        let _ = std::fs::remove_file(path);
+                    }
+                    s.status_file = None;
                 }
-                s.status_file = None;
                 current = s.clone();
             }
         }
 
-        // Read phase from status file
+        // Read phase from status file and update state
+        // Note: the binary writes seeding → warming → cleaning (no "running" phase).
+        // We infer "running" from elapsed time past warmup duration.
         if let Some(ref sf) = current.status_file {
             if let Ok(phase) = std::fs::read_to_string(sf) {
-                match phase.as_str() {
-                    "seeding" if current.status != "seeding" => {
-                        runner_state().lock().unwrap_or_else(|e| e.into_inner()).status = "seeding".to_string();
-                        current.status = "seeding".to_string();
+                let phase = phase.trim();
+                let mut s = runner_state().lock().unwrap_or_else(|e| e.into_inner());
+                match phase {
+                    "seeding" if s.status != "seeding" => {
+                        s.status = "seeding".to_string();
                     },
-                    "warming" if current.warming_started_at.is_none() => {
-                        let mut s = runner_state().lock().unwrap_or_else(|e| e.into_inner());
-                        s.warming_started_at = Some(now_secs());
-                        s.status = "warming".to_string();
-                        current = s.clone();
-                    },
-                    "running" | "warming" => {
-                        if let Some(ws) = current.warming_started_at {
-                            if now_secs() - ws >= current.warmup_duration as f64 {
-                                runner_state().lock().unwrap_or_else(|e| e.into_inner()).status = "running".to_string();
-                                current.status = "running".to_string();
-                            }
+                    "warming" => {
+                        if s.warming_started_at.is_none() {
+                            s.warming_started_at = Some(now_secs());
+                        }
+                        // Check if warmup period has elapsed → transition to "running"
+                        let warmup_elapsed = s.warming_started_at.map(|ws| now_secs() - ws).unwrap_or(0.0);
+                        if warmup_elapsed >= s.warmup_duration as f64 {
+                            s.status = "running".to_string();
+                        } else {
+                            s.status = "warming".to_string();
                         }
                     },
-                    "cleaning" if current.status != "cleaning" => {
-                        runner_state().lock().unwrap_or_else(|e| e.into_inner()).status = "cleaning".to_string();
-                        current.status = "cleaning".to_string();
+                    "cleaning" if s.status != "cleaning" => {
+                        s.status = "cleaning".to_string();
                     },
                     _ => {},
                 }
+                current = s.clone();
             }
         }
 
+        // Calculate elapsed: time since warmup ended (start of actual measurement)
         let elapsed = if current.status == "running" {
-            let start = current.warming_started_at
-                .map(|s| s + current.warmup_duration as f64)
-                .or(current.started_at)
+            let measuring_start = current.warming_started_at
+                .map(|ws| ws + current.warmup_duration as f64)
                 .unwrap_or(now_secs());
-            (now_secs() - start).max(0.0)
+            let raw = (now_secs() - measuring_start).max(0.0);
+            // Cap at configured duration
+            match current.configured_duration {
+                Some(d) if d > 0 => raw.min(d as f64),
+                _ => raw,
+            }
         } else { 0.0 };
 
         reply().json(json!({
@@ -295,7 +316,8 @@ resource!(BenchmarkRunner {
             use std::os::unix::process::CommandExt;
             unsafe {
                 cmd.pre_exec(|| {
-                    for fd in 3..4096 { libc::close(fd); }
+                    // Close all inherited FDs — RocksDB can open thousands of SST files
+                    for fd in 3..65536 { libc::close(fd); }
                     Ok(())
                 });
             }
