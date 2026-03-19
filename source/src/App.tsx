@@ -293,7 +293,7 @@ interface TestCardProps {
 
 function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedSecs, configuredDuration, onRun, onOpenHistory }: TestCardProps) {
   const results = latest?.results
-  const hasData = results && results.throughput
+  const hasData = !!(results && results.throughput)
   const isRealtimeTest = test.binary === 'load-realtime'
 
   const cardClass = ['metric-card bench-card',

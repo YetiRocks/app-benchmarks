@@ -1,7 +1,7 @@
 name: "Yeti Benchmarks"
 app_id: "app-benchmarks"
 version: "0.1.0"
-require_super_user: true
+# Auth handled per-table via @export(public: [...]) directives in schema
 
 static_files:
   path: web
@@ -20,5 +20,3 @@ binaries:
 modules:
   - "modules/*.rs"
 
-auth:
-  methods: [jwt, oauth]

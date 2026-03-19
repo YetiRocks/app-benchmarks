@@ -56,10 +56,11 @@ resource!(BestResults {
             let results: Value = serde_json::from_str(results_str).unwrap_or(json!({}));
             let throughput = results.get("throughput").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-            // Skip runs with >1% error rate
-            let errors = results.get("errors").and_then(|v| v.as_u64()).unwrap_or(0);
+            // Skip runs with no results or >1% error rate
             let total = results.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
-            if total > 0 && (errors as f64 / total as f64) > 0.01 { continue; }
+            if total == 0 { continue; }
+            let errors = results.get("errors").and_then(|v| v.as_u64()).unwrap_or(0);
+            if (errors as f64 / total as f64) > 0.01 { continue; }
 
             let is_better = match best_by_test.get(&test_name) {
                 Some(existing) => throughput > existing.get("throughput").and_then(|v| v.as_f64()).unwrap_or(0.0),

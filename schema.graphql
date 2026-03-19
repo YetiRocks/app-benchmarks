@@ -1,4 +1,4 @@
-type TestRun @table(database: "app-benchmarks") @export(mqtt: false) {
+type TestRun @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
     id: ID!
     testName: String! @indexed
     timestamp: String!
@@ -9,7 +9,7 @@ type TestRun @table(database: "app-benchmarks") @export(mqtt: false) {
     snapshots: String
 }
 
-type Book @table(database: "app-benchmarks", residency: "sharded") @export(mqtt: false) {
+type Book @table(database: "app-benchmarks", residency: "sharded") @export(mqtt: false, public: [read, create, update, delete]) {
     id: ID!
     title: String!
     isbn: String! @indexed
@@ -19,12 +19,12 @@ type Book @table(database: "app-benchmarks", residency: "sharded") @export(mqtt:
     author: Author @relationship(from: "authorId")
 }
 
-type Author @table(database: "app-benchmarks", residency: "sharded") @export(mqtt: false) {
+type Author @table(database: "app-benchmarks", residency: "sharded") @export(mqtt: false, public: [read, create, update, delete]) {
     id: ID!
     name: String!
 }
 
-type Article @table(database: "app-benchmarks") @export(mqtt: false) {
+type Article @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
     id: ID!
     title: String!
     author: String!
@@ -33,7 +33,7 @@ type Article @table(database: "app-benchmarks") @export(mqtt: false) {
     embedding: Vector @indexed(source: "content")
 }
 
-type Blob @table(database: "app-benchmarks") @export(mqtt: false) {
+type Blob @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
     id: ID!
     title: String!
     author: String!
@@ -46,6 +46,7 @@ type Message @table(database: "app-benchmarks") @export(
     sse: true
     ws: true
     mqtt: false
+    public: [read, create, delete, subscribe, connect]
 ) {
     id: ID!
     title: String!
