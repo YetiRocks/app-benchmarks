@@ -259,6 +259,51 @@ pub async fn run(args: BenchArgs) {
             )
             .await;
         },
+        "graphql-batch-write" => {
+            let book_table = "GqlBatchWriteBook";
+            write_phase(&args, "seeding");
+            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+
+            write_phase(&args, "warming");
+            let batch_size = 100usize;
+            let book_table_owned = book_table.to_string();
+            let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
+                args.vus, duration, warmup,
+                LoadTestConfig { client: client.clone(), base_url: args.base_url.clone(), auth_user: auth_user.clone(), auth_pass: auth_pass.clone() },
+                move |ctx| {
+                    let book_table = book_table_owned.clone();
+                    async move {
+                        // Build N aliased create mutations in one GraphQL request
+                        let create_fn = format!("create{}", book_table);
+                        let mutations: Vec<String> = (0..batch_size)
+                            .map(|i| {
+                                let id = Uuid::new_v4().to_string();
+                                format!(
+                                    r#"m{i}: {create_fn}(input: {{ id: "{id}", title: "Batch {short}", price: 9.99, authorId: "bench-author-1" }}) {{ id }}"#,
+                                    i = i, create_fn = create_fn, id = id, short = &id[..8]
+                                )
+                            })
+                            .collect();
+                        let query = format!("mutation {{ {} }}", mutations.join(" "));
+                        let body = serde_json::json!({ "query": query });
+                        let url = format!("{}/app-benchmarks/graphql", ctx.base_url);
+                        let start = std::time::Instant::now();
+                        let result = ctx.client.post(&url)
+                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                            .json(&body).send().await;
+                        ctx.record_batch_response(start, result, batch_size as u64).await;
+                    }
+                },
+            ).await;
+
+            let summary = metrics.summary(elapsed);
+            validate_error_rate(&summary);
+            let rctx = ReportContext { client: &client, base_url: &args.base_url, auth_user: &auth_user, auth_pass: &auth_pass };
+            reporter::report_results_with_snapshots(&rctx, "graphql-batch-write", elapsed, &summary, &snapshots, args.vus).await;
+
+            write_phase(&args, "cleaning");
+            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+        },
         "graphql-update" => {
             let book_table = "GqlUpdateBook";
             write_phase(&args, "seeding");

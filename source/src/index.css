@@ -42,11 +42,11 @@ html, body, #root { height: 100%; margin: 0; }
 .bench-error { padding: var(--space-2) var(--space-4); margin-bottom: var(--space-4); background: rgba(187, 33, 36, 0.15); border: 1px solid var(--color-error); border-radius: var(--radius-sm); color: var(--color-error); font-size: var(--font-size-sm); }
 
 /* Test cards */
-.bench-card { cursor: pointer; display: flex; flex-direction: column; gap: var(--space-3); background: var(--color-black-overlay); border: none; }
+.bench-card { cursor: pointer; display: flex; flex-direction: column; gap: var(--space-1); background: var(--color-black-overlay); border: none; }
 .bench-card:hover { border: none; }
 .bench-card.bench-disabled { opacity: 0.5; }
 .bench-card-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.bench-card-header .metric-name { margin-bottom: 0; color: #fff; font-weight: 600; }
+.bench-card-header .metric-name { margin-bottom: 0; color: var(--color-grey); font-size: var(--font-size-xs, 0.75rem); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
 .bench-card-header .btn { flex-shrink: 0; }
 .bench-card-actions { display: flex; align-items: center; gap: var(--space-2); min-height: 28px; }
 
@@ -62,9 +62,9 @@ html, body, #root { height: 100%; margin: 0; }
 /* Card stats */
 .bench-card-stats { display: flex; margin-top: 0; }
 .bench-stat { display: flex; flex-direction: column; align-items: center; flex: 1; }
-.bench-stat-value { font-size: var(--font-size-2xl, 1.5rem); font-weight: 700; color: var(--color-white); }
+.bench-stat-value { font-size: var(--font-size-2xl, 1.5rem); font-weight: 400; color: var(--color-white); }
 .bench-stat-value.bench-stat-empty { color: var(--color-grey); }
-.bench-stat-label { font-size: var(--font-size-sm); color: var(--color-grey); white-space: nowrap; }
+.bench-stat-label { font-size: var(--font-size-xs, 0.75rem); font-weight: 700; color: var(--color-grey); letter-spacing: 0.1em; white-space: nowrap; }
 
 /* History button */
 .bench-history-btn { background: none; border: 1px solid var(--color-border-primary); border-radius: var(--radius-sm); color: var(--color-grey); cursor: pointer; padding: 4px 6px; display: flex; align-items: center; transition: color var(--transition-fast), border-color var(--transition-fast); }

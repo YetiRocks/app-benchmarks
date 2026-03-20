@@ -29,13 +29,15 @@ impl TestDef {
 }
 
 const TESTS: &[TestDef] = &[
-    TestDef::quick("rest-read", "REST Reads", "load-rest", 100),
-    TestDef::quick("rest-write", "REST Writes", "load-rest", 100),
+    TestDef::quick("rest-read", "REST Read", "load-rest", 100),
+    TestDef::quick("rest-write", "REST Write", "load-rest", 100),
+    TestDef::quick("rest-batch-write", "REST Batch Write", "load-rest", 100),
     TestDef::quick("rest-update", "REST Update", "load-rest", 100),
     TestDef::quick("rest-join", "REST Join", "load-rest", 100),
-    TestDef::quick("graphql-read", "GraphQL Reads", "load-graphql", 100),
-    TestDef::quick("graphql-mutation", "GraphQL Writes", "load-graphql", 100),
-    TestDef::quick("graphql-update", "GraphQL Updates", "load-graphql", 100),
+    TestDef::quick("graphql-read", "GraphQL Read", "load-graphql", 100),
+    TestDef::quick("graphql-mutation", "GraphQL Write", "load-graphql", 100),
+    TestDef::quick("graphql-batch-write", "GraphQL Batch Write", "load-graphql", 100),
+    TestDef::quick("graphql-update", "GraphQL Update", "load-graphql", 100),
     TestDef::quick("graphql-join", "GraphQL Join", "load-graphql", 100),
     TestDef::quick("vector-embed", "Vector Embed", "load-vector", 10),
     TestDef::quick("vector-search", "Vector Search", "load-vector", 100),

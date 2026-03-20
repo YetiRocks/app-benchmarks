@@ -259,4 +259,32 @@ impl ScenarioContext {
             Err(_) => self.metrics.record_error(),
         }
     }
+
+    /// Record a batch HTTP response as N individual records.
+    /// Latency is divided by batch_size (amortized per-record cost).
+    /// Total/throughput counts each record in the batch.
+    pub async fn record_batch_response(
+        &self,
+        start: std::time::Instant,
+        result: Result<reqwest::Response, reqwest::Error>,
+        batch_size: u64,
+    ) {
+        match result {
+            Ok(resp) => {
+                let status = resp.status();
+                let bytes = resp.bytes().await.map(|b| b.len() as u64).unwrap_or(0);
+                let latency = start.elapsed().as_micros() as u64;
+                if status.is_success() {
+                    let per_record_latency = latency / batch_size;
+                    let per_record_bytes = bytes / batch_size;
+                    for _ in 0..batch_size {
+                        self.metrics.record_success(per_record_latency, per_record_bytes);
+                    }
+                } else {
+                    self.metrics.record_error();
+                }
+            },
+            Err(_) => self.metrics.record_error(),
+        }
+    }
 }

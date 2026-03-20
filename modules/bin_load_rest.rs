@@ -285,6 +285,57 @@ pub async fn run(args: BenchArgs) {
             )
             .await;
         },
+        "rest-batch-write" => {
+            let book_table = "BatchWriteBook";
+            write_phase(&args, "seeding");
+            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+
+            write_phase(&args, "warming");
+            let batch_size = 100usize;
+            let book_table_owned = book_table.to_string();
+            let scenario = move |ctx: Arc<runner::ScenarioContext>| {
+                let book_table = book_table_owned.clone();
+                async move {
+                    // Build a batch of 100 records as a JSON array
+                    let records: Vec<serde_json::Value> = (0..batch_size)
+                        .map(|_| {
+                            let id = Uuid::new_v4().to_string();
+                            serde_json::json!({
+                                "id": id,
+                                "title": format!("Batch {}", &id[..8]),
+                                "price": 9.99,
+                                "authorId": "bench-author-1",
+                            })
+                        })
+                        .collect();
+                    let body = serde_json::Value::Array(records);
+                    let url = format!("{}/app-benchmarks/{}/", ctx.base_url, book_table);
+                    let start = std::time::Instant::now();
+                    let result = ctx
+                        .client
+                        .post(&url)
+                        .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                        .json(&body)
+                        .send()
+                        .await;
+                    ctx.record_batch_response(start, result, batch_size as u64).await;
+                }
+            };
+
+            let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
+                args.vus, duration, warmup,
+                LoadTestConfig { client: client.clone(), base_url: args.base_url.clone(), auth_user: auth_user.clone(), auth_pass: auth_pass.clone() },
+                scenario,
+            ).await;
+
+            let summary = metrics.summary(elapsed);
+            validate_error_rate(&summary);
+            let rctx = ReportContext { client: &client, base_url: &args.base_url, auth_user: &auth_user, auth_pass: &auth_pass };
+            reporter::report_results_with_snapshots(&rctx, "rest-batch-write", elapsed, &summary, &snapshots, args.vus).await;
+
+            write_phase(&args, "cleaning");
+            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+        },
         "rest-update" => {
             let book_table = "UpdateBook";
             let author_table = "UpdateAuthor";

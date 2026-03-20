@@ -11,13 +11,15 @@ use yeti_sdk::prelude::*;
 // Test definitions — single source of truth (matches benchmark_runner.rs TESTS)
 const TESTS: &[(&str, &str, &str, u64, u64, &str)] = &[
     // (id, name, binary, duration, vus, category)
-    ("rest-read", "REST Reads", "load-rest", 30, 100, "throughput"),
-    ("rest-write", "REST Writes", "load-rest", 30, 100, "throughput"),
+    ("rest-read", "REST Read", "load-rest", 30, 100, "throughput"),
+    ("rest-write", "REST Write", "load-rest", 30, 100, "throughput"),
+    ("rest-batch-write", "REST Batch Write", "load-rest", 30, 100, "throughput"),
     ("rest-update", "REST Update", "load-rest", 30, 100, "throughput"),
     ("rest-join", "REST Join", "load-rest", 30, 100, "throughput"),
-    ("graphql-read", "GraphQL Reads", "load-graphql", 30, 100, "throughput"),
-    ("graphql-mutation", "GraphQL Writes", "load-graphql", 30, 100, "throughput"),
-    ("graphql-update", "GraphQL Updates", "load-graphql", 30, 100, "throughput"),
+    ("graphql-read", "GraphQL Read", "load-graphql", 30, 100, "throughput"),
+    ("graphql-mutation", "GraphQL Write", "load-graphql", 30, 100, "throughput"),
+    ("graphql-batch-write", "GraphQL Batch Write", "load-graphql", 30, 100, "throughput"),
+    ("graphql-update", "GraphQL Update", "load-graphql", 30, 100, "throughput"),
     ("graphql-join", "GraphQL Join", "load-graphql", 30, 100, "throughput"),
     ("vector-embed", "Vector Embed", "load-vector", 30, 10, "throughput"),
     ("vector-search", "Vector Search", "load-vector", 30, 100, "throughput"),

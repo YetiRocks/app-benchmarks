@@ -83,6 +83,22 @@ type GqlJoinAuthor @table(database: "app-benchmarks") @export(mqtt: false, publi
     name: String!
 }
 
+# ── REST Batch Write tables ──
+type BatchWriteBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
+# ── GraphQL Batch Write tables ──
+type GqlBatchWriteBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
 # ── Vector tables ──
 type EmbedArticle @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
     id: ID!

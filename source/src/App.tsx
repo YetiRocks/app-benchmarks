@@ -7,12 +7,16 @@ import { BenchmarkChart } from './components/BenchmarkChart'
 
 function formatNumber(n: number): string {
   if (n >= 1000000) { const v = n / 1000000; return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'M' }
-  if (n >= 1000) { const v = n / 1000; return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(n >= 10000 ? 0 : 1)) + 'k' }
+  if (n >= 10000) return Math.round(n / 1000) + 'k'
+  if (n >= 1000) { const v = n / 1000; const s = v.toFixed(1); return (s.endsWith('.0') ? s.slice(0, -2) : s) + 'k' }
   return n.toFixed(0)
 }
 
+
 function formatMs(n: number): string {
   if (n === 0) return '-'
+  if (n >= 100) return n.toFixed(0)
+  if (n >= 10) return n.toFixed(1)
   return n.toFixed(2)
 }
 
@@ -263,7 +267,7 @@ export default function App() {
                         <tr key={run.id}>
                           <td>{formatDate(run.timestamp)}</td>
                           <td>{parsed.peakConnections != null ? formatNumber(parsed.peakConnections) : run.clients ? formatNumber(run.clients) : '-'}</td>
-                          <td>{isRT ? formatNumber(parsed.published ?? 0) : formatNumber(parsed.throughput ?? 0)}</td>
+                          <td>{formatNumber(parsed.throughput ?? 0)}</td>
                           <td>{isRT ? formatNumber(parsed.total ?? 0) : (parsed.p95 != null ? formatMs(parsed.p95) : '-')}</td>
                           <td>{isRT
                             ? (parsed.total && parsed.peakConnections && parsed.published
@@ -336,22 +340,19 @@ function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedSecs, co
           <span className="bench-stat-value">
             {hasData && results!.peakConnections != null ? formatNumber(results!.peakConnections!) : formatNumber(test.vus)}
           </span>
-          <span className="bench-stat-label">clients</span>
+          <span className="bench-stat-label">VUS</span>
         </div>
         <div className="bench-stat">
           <span className={`bench-stat-value${hasData ? '' : ' bench-stat-empty'}`}>
-            {hasData ? (isRealtimeTest
-              ? formatNumber(results!.published ?? 0)
-              : formatNumber(results!.throughput!))
-              : '-'}
+            {hasData ? formatNumber(results!.throughput ?? 0) : '-'}
           </span>
-          <span className="bench-stat-label">{isRealtimeTest ? 'msg/s' : 'RPS'}</span>
+          <span className="bench-stat-label">{isRealtimeTest ? 'M/S' : 'RPS'}</span>
         </div>
         <div className="bench-stat">
           <span className={`bench-stat-value${hasData ? '' : ' bench-stat-empty'}`}>
             {hasData ? (isRealtimeTest ? formatNumber(results!.total ?? 0) : formatMs(results!.p95 ?? 0)) : '-'}
           </span>
-          <span className="bench-stat-label">{isRealtimeTest ? 'total' : 'ms p95'}</span>
+          <span className="bench-stat-label">{isRealtimeTest ? 'TOTAL' : 'P95'}</span>
         </div>
       </div>
     </div>
