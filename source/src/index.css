@@ -62,7 +62,7 @@ html, body, #root { height: 100%; margin: 0; }
 /* Card stats */
 .bench-card-stats { display: flex; margin-top: 0; }
 .bench-stat { display: flex; flex-direction: column; align-items: center; flex: 1; }
-.bench-stat-value { font-size: var(--font-size-2xl, 1.5rem); font-weight: 400; color: var(--color-white); }
+.bench-stat-value { font-size: var(--font-size-2xl, 1.5rem); font-weight: 700; color: var(--color-white); }
 .bench-stat-value.bench-stat-empty { color: var(--color-grey); }
 .bench-stat-label { font-size: var(--font-size-xs, 0.75rem); font-weight: 700; color: var(--color-grey); letter-spacing: 0.1em; white-space: nowrap; }
 
