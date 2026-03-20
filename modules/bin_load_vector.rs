@@ -57,19 +57,21 @@ pub async fn run(args: BenchArgs) {
 
     match args.test.as_str() {
         "vector-embed" => {
+            let article_table = "EmbedArticle";
             write_phase(&args, "seeding");
-            tracing::info!("Clearing Article table...");
+            tracing::info!("Clearing {} table...", article_table);
             clear_tables(
                 &client,
                 &args.base_url,
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Article"],
+                &[article_table],
             )
             .await;
 
             write_phase(&args, "warming");
+            let article_table_owned = article_table.to_string();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -80,29 +82,32 @@ pub async fn run(args: BenchArgs) {
                     auth_user: auth_user.clone(),
                     auth_pass: auth_pass.clone(),
                 },
-                |ctx| async move {
-                    let id = Uuid::new_v4().to_string();
-                    let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
-                    let body = serde_json::json!({
-                        "id": id,
-                        "title": format!("Vector Article {}", &id[..8]),
-                        "author": "Benchmark",
-                        "category": "benchmark",
-                        "content": format!(
-                            "This article explores {}. Generated for benchmark testing with unique content to trigger embedding computation. ID: {}",
-                            SAMPLE_TOPICS[topic_idx], id
-                        ),
-                    });
-                    let url = format!("{}/app-benchmarks/Article/", ctx.base_url);
-                    let start = std::time::Instant::now();
-                    let result = ctx
-                        .client
-                        .post(&url)
-                        .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
-                        .json(&body)
-                        .send()
-                        .await;
-                    ctx.record_response(start, result).await;
+                move |ctx| {
+                    let article_table = article_table_owned.clone();
+                    async move {
+                        let id = Uuid::new_v4().to_string();
+                        let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
+                        let body = serde_json::json!({
+                            "id": id,
+                            "title": format!("Vector Article {}", &id[..8]),
+                            "author": "Benchmark",
+                            "category": "benchmark",
+                            "content": format!(
+                                "This article explores {}. Generated for benchmark testing with unique content to trigger embedding computation. ID: {}",
+                                SAMPLE_TOPICS[topic_idx], id
+                            ),
+                        });
+                        let url = format!("{}/app-benchmarks/{}/", ctx.base_url, article_table);
+                        let start = std::time::Instant::now();
+                        let result = ctx
+                            .client
+                            .post(&url)
+                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                            .json(&body)
+                            .send()
+                            .await;
+                        ctx.record_response(start, result).await;
+                    }
                 },
             )
             .await;
@@ -132,20 +137,21 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Article"],
+                &[article_table],
             )
             .await;
         },
         "vector-search" => {
+            let article_table = "SearchArticle";
             write_phase(&args, "seeding");
-            tracing::info!("Seeding 50 Articles for vector search...");
+            tracing::info!("Seeding 50 {} records for vector search...", article_table);
             clear_tables(
                 &client,
                 &args.base_url,
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Article"],
+                &[article_table],
             )
             .await;
             for i in 0..50 {
@@ -161,7 +167,7 @@ pub async fn run(args: BenchArgs) {
                         SAMPLE_TOPICS[topic_idx], id
                     ),
                 });
-                let url = format!("{}/app-benchmarks/Article/", args.base_url);
+                let url = format!("{}/app-benchmarks/{}/", args.base_url, article_table);
                 let _ = client
                     .post(&url)
                     .basic_auth(&auth_user, Some(&auth_pass))
@@ -173,6 +179,7 @@ pub async fn run(args: BenchArgs) {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
             write_phase(&args, "warming");
+            let article_table_owned = article_table.to_string();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -183,29 +190,33 @@ pub async fn run(args: BenchArgs) {
                     auth_user: auth_user.clone(),
                     auth_pass: auth_pass.clone(),
                 },
-                |ctx| async move {
-                    let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
-                    let query = serde_json::json!({
-                        "conditions": [{
-                            "field": "embedding",
-                            "op": "vector",
-                            "value": SAMPLE_TOPICS[topic_idx]
-                        }],
-                        "limit": 10
-                    });
-                    let url = format!(
-                        "{}/app-benchmarks/Article/?query={}",
-                        ctx.base_url,
-                        urlencoding(query.to_string())
-                    );
-                    let start = std::time::Instant::now();
-                    let result = ctx
-                        .client
-                        .get(&url)
-                        .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
-                        .send()
-                        .await;
-                    ctx.record_response(start, result).await;
+                move |ctx| {
+                    let article_table = article_table_owned.clone();
+                    async move {
+                        let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
+                        let query = serde_json::json!({
+                            "conditions": [{
+                                "field": "embedding",
+                                "op": "vector",
+                                "value": SAMPLE_TOPICS[topic_idx]
+                            }],
+                            "limit": 10
+                        });
+                        let url = format!(
+                            "{}/app-benchmarks/{}/?query={}",
+                            ctx.base_url,
+                            article_table,
+                            urlencoding(query.to_string())
+                        );
+                        let start = std::time::Instant::now();
+                        let result = ctx
+                            .client
+                            .get(&url)
+                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                            .send()
+                            .await;
+                        ctx.record_response(start, result).await;
+                    }
                 },
             )
             .await;
@@ -235,7 +246,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Article"],
+                &[article_table],
             )
             .await;
         },

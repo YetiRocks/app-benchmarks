@@ -70,8 +70,9 @@ pub async fn clear_tables(
     }
 }
 
-/// Fetch real Book IDs from the server via REST API.
+/// Fetch real record IDs from the server via REST API.
 pub async fn fetch_book_ids(
+    table: &str,
     client: &reqwest::Client,
     base_url: &str,
     auth_user: &str,
@@ -79,8 +80,8 @@ pub async fn fetch_book_ids(
     limit: usize,
 ) -> Vec<String> {
     let url = format!(
-        "{}/app-benchmarks/Book?limit={}&select=id",
-        base_url, limit
+        "{}/app-benchmarks/{}?limit={}&select=id",
+        base_url, table, limit
     );
     match client
         .get(&url)
@@ -129,6 +130,7 @@ pub struct ReportContext<'a> {
 /// prints a summary, and returns a JSON value with verification + WAL stats for inclusion
 /// in the TestRun results.
 pub async fn verify_write_results(
+    table: &str,
     client: &reqwest::Client,
     base_url: &str,
     auth_user: &str,
@@ -139,7 +141,7 @@ pub async fn verify_write_results(
     tracing::info!("Waiting for WAL consumer drain...");
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-    let url = format!("{}/app-benchmarks/Book?_metadata=true", base_url);
+    let url = format!("{}/app-benchmarks/{}?_metadata=true", base_url, table);
     let resp = match client
         .get(&url)
         .basic_auth(auth_user, Some(auth_pass))

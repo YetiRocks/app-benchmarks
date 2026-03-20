@@ -35,10 +35,12 @@ pub fn build_streaming_client() -> Client {
 /// Build a WebSocket TLS connector that accepts self-signed certs.
 pub fn build_ws_connector() -> tokio_tungstenite::Connector {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let config = rustls::ClientConfig::builder()
+    let mut config = rustls::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(NoCertVerifier))
         .with_no_client_auth();
+    // Enable TLS session resumption — reuse sessions for faster reconnects
+    config.resumption = rustls::client::Resumption::in_memory_sessions(65536);
     tokio_tungstenite::Connector::Rustls(Arc::new(config))
 }
 

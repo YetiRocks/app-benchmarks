@@ -10,7 +10,6 @@
 # Shared with yeti-sdk but needed as direct imports by load test code
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "process", "io-util", "fs", "net"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "charset", "http2", "json"] }
-serde_json = "1"
 tracing = "0.1"
 
 # Benchmark-specific
@@ -22,5 +21,6 @@ rand = "0.9"
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 futures = "0.3"
+rumqttc = "0.24"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 libc = "0.2"

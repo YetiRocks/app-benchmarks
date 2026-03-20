@@ -65,47 +65,97 @@ impl ConnectionTracker {
     }
 }
 
-const BATCH_SIZE: u64 = 1000;
-const BATCH_DELAY_MS: u64 = 100;
+// Ramp rate: max connections per second to avoid overwhelming TLS handshake capacity.
+// At ~2500 conn/sec the server stays stable on typical hardware.
+const MAX_CONNECTIONS_PER_SEC: u64 = 1000;
+const BATCH_SIZE: u64 = 100;
+const BATCH_DELAY_MS: u64 = (1000 * BATCH_SIZE / MAX_CONNECTIONS_PER_SEC);
+
+/// Check if the system can handle more connections.
+/// Returns false if failure rate is too high or we're running low on resources.
+fn should_continue_ramp(tracker: &ConnectionTracker, target: u64) -> bool {
+    let connected = tracker.connected.load(Ordering::Relaxed);
+    let failed = tracker.failed.load(Ordering::Relaxed);
+    let total_attempted = connected + failed;
+
+    // Stop if >20% of connections are failing
+    if total_attempted > 100 && failed as f64 / total_attempted as f64 > 0.20 {
+        tracing::warn!(
+            "Stopping ramp: failure rate {:.0}% ({}/{} failed), {} connected of {} target",
+            (failed as f64 / total_attempted as f64) * 100.0,
+            failed, total_attempted, connected, target
+        );
+        return false;
+    }
+
+    true
+}
 
 pub async fn run(args: BenchArgs) {
     crate::common::init_tracing();
+
+    // Raise FD limit for high connection counts
+    #[cfg(unix)]
+    unsafe {
+        let mut rlim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut rlim) == 0 {
+            let target = (args.vus as u64 + 1024).min(rlim.rlim_max);
+            if rlim.rlim_cur < target {
+                rlim.rlim_cur = target;
+                libc::setrlimit(libc::RLIMIT_NOFILE, &rlim);
+                tracing::info!("Raised RLIMIT_NOFILE to {} (max={})", target, rlim.rlim_max);
+            }
+        }
+    }
     let (auth_user, auth_pass) = args.auth_parts();
     let auth_user = auth_user.to_string();
     let auth_pass = auth_pass.to_string();
     let client = client::build_client();
-    let duration = Duration::from_secs(args.duration);
+
+    // Adaptive duration: extend test if ramp time exceeds configured duration.
+    // Ramp time = vus / MAX_CONNECTIONS_PER_SEC seconds.
+    // Ensure at least 30s of measurement AFTER ramp completes.
+    let ramp_secs = (args.vus as f64 / MAX_CONNECTIONS_PER_SEC as f64).ceil() as u64;
+    let min_measurement_secs = 30;
+    let effective_duration = args.duration.max(ramp_secs + min_measurement_secs);
+    if effective_duration > args.duration {
+        tracing::info!(
+            "Extended test duration from {}s to {}s (ramp takes ~{}s for {} connections at {}/sec)",
+            args.duration, effective_duration, ramp_secs, args.vus, MAX_CONNECTIONS_PER_SEC
+        );
+    }
+    let duration = Duration::from_secs(effective_duration);
     let warmup = Duration::from_secs(args.warmup);
 
     tracing::info!(
         "load-realtime: test={}, duration={}s, warmup={}s, vus={} (subscribers), mode={}, base={}",
         args.test,
-        args.duration,
+        effective_duration,
         args.warmup,
         args.vus,
         args.mode,
         args.base_url
     );
 
-    // Clear Message table before all realtime tests
-    write_phase(&args, "seeding");
-    tracing::info!("Clearing Message table...");
-    clear_tables(
-        &client,
-        &args.base_url,
-        &auth_user,
-        &auth_pass,
-        "app-benchmarks",
-        &["Message"],
-    )
-    .await;
-
-    write_phase(&args, "warming");
-
     match args.test.as_str() {
-        "ws" => {
+        "ws" | "ws-ramp" => {
+            let message_table = "WsMessage";
+            write_phase(&args, "seeding");
+            tracing::info!("Clearing {} table...", message_table);
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &[message_table],
+            )
+            .await;
+
+            write_phase(&args, "warming");
+            let is_ramp = args.test.as_str() == "ws-ramp";
             run_ws_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, false,
+                &args, &auth_user, &auth_pass, &client, duration, warmup, is_ramp, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
@@ -115,13 +165,27 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Message"],
+                &[message_table],
             )
             .await;
         },
-        "ws-ramp" => {
-            run_ws_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, true,
+        "ws-publish" => {
+            let message_table = "WsPublishMessage";
+            write_phase(&args, "seeding");
+            tracing::info!("Clearing {} table...", message_table);
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &[message_table],
+            )
+            .await;
+
+            write_phase(&args, "warming");
+            run_ws_publish_test(
+                &args, &auth_user, &auth_pass, &client, duration, warmup, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
@@ -131,13 +195,28 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Message"],
+                &[message_table],
             )
             .await;
         },
-        "sse" => {
+        "sse" | "sse-ramp" => {
+            let message_table = "SseMessage";
+            write_phase(&args, "seeding");
+            tracing::info!("Clearing {} table...", message_table);
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &[message_table],
+            )
+            .await;
+
+            write_phase(&args, "warming");
+            let is_ramp = args.test.as_str() == "sse-ramp";
             run_sse_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, false,
+                &args, &auth_user, &auth_pass, &client, duration, warmup, is_ramp, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
@@ -147,13 +226,27 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Message"],
+                &[message_table],
             )
             .await;
         },
-        "sse-ramp" => {
-            run_sse_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, true,
+        "mqtt" => {
+            let message_table = "MqttMessage";
+            write_phase(&args, "seeding");
+            tracing::info!("Clearing {} table...", message_table);
+            clear_tables(
+                &client,
+                &args.base_url,
+                &auth_user,
+                &auth_pass,
+                "app-benchmarks",
+                &[message_table],
+            )
+            .await;
+
+            write_phase(&args, "warming");
+            run_mqtt_test(
+                &args, &auth_user, &auth_pass, &client, duration, warmup, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
@@ -163,7 +256,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Message"],
+                &[message_table],
             )
             .await;
         },
@@ -184,6 +277,7 @@ async fn run_ws_test(
     duration: Duration,
     warmup: Duration,
     is_ramp: bool,
+    message_table: &str,
 ) {
     let metrics = Arc::new(Metrics::new());
     let tracker = Arc::new(ConnectionTracker::new());
@@ -212,6 +306,12 @@ async fn run_ws_test(
 
     let initial = if is_ramp { initial_vus } else { total_vus };
     for batch_start in (0..initial).step_by(BATCH_SIZE as usize) {
+        // Check resource pressure before spawning more
+        if !should_continue_ramp(&tracker, total_vus) {
+            tracing::info!("Ramp halted at {} spawned due to resource pressure", batch_start);
+            break;
+        }
+
         let batch_end = (batch_start + BATCH_SIZE).min(initial);
 
         for _vu in batch_start..batch_end {
@@ -222,6 +322,7 @@ async fn run_ws_test(
                 &tracker,
                 &stop,
                 &mut handles,
+                message_table,
             );
         }
 
@@ -254,9 +355,11 @@ async fn run_ws_test(
         tracker.failed.load(Ordering::Relaxed),
     );
 
+    // Publish as fast as possible to measure max fan-out throughput.
+    // 4 concurrent publishers to saturate the server's write path.
     let num_publishers = 4;
-    let pub_url = format!("{}/app-benchmarks/Message", args.base_url);
     let mut pub_handles = Vec::new();
+    let pub_url = format!("{}/app-benchmarks/{}", args.base_url, message_table);
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -313,6 +416,7 @@ async fn run_ws_test(
                         for _ in 0..to_add {
                             spawn_ws_subscriber(
                                 &args.base_url, &connector, &metrics, &tracker, &stop, &mut handles,
+                                message_table,
                             );
                         }
                         current_spawned += to_add;
@@ -416,12 +520,14 @@ fn spawn_ws_subscriber(
     tracker: &Arc<ConnectionTracker>,
     stop: &Arc<AtomicBool>,
     handles: &mut Vec<tokio::task::JoinHandle<()>>,
+    message_table: &str,
 ) {
     let ws_url = format!(
-        "{}/app-benchmarks/Message?stream=ws",
+        "{}/app-benchmarks/{}?stream=ws",
         base_url
             .replace("https://", "wss://")
-            .replace("http://", "ws://")
+            .replace("http://", "ws://"),
+        message_table
     );
     let m = metrics.clone();
     let t = tracker.clone();
@@ -476,6 +582,7 @@ struct SseSubscriberCtx<'a> {
     metrics: &'a Arc<Metrics>,
     tracker: &'a Arc<ConnectionTracker>,
     stop: &'a Arc<AtomicBool>,
+    message_table: &'a str,
 }
 
 async fn run_sse_test(
@@ -486,6 +593,7 @@ async fn run_sse_test(
     duration: Duration,
     warmup: Duration,
     is_ramp: bool,
+    message_table: &str,
 ) {
     let metrics = Arc::new(Metrics::new());
     let tracker = Arc::new(ConnectionTracker::new());
@@ -521,8 +629,14 @@ async fn run_sse_test(
         metrics: &metrics,
         tracker: &tracker,
         stop: &stop,
+        message_table,
     };
     for batch_start in (0..initial).step_by(BATCH_SIZE as usize) {
+        if !should_continue_ramp(&tracker, total_vus) {
+            tracing::info!("Ramp halted at {} spawned due to resource pressure", batch_start);
+            break;
+        }
+
         let batch_end = (batch_start + BATCH_SIZE).min(initial);
 
         for _vu in batch_start..batch_end {
@@ -558,9 +672,10 @@ async fn run_sse_test(
         tracker.failed.load(Ordering::Relaxed),
     );
 
+    // Publish as fast as possible to measure max fan-out throughput
     let num_publishers = 4;
-    let pub_url = format!("{}/app-benchmarks/Message", args.base_url);
     let mut pub_handles = Vec::new();
+    let pub_url = format!("{}/app-benchmarks/{}", args.base_url, message_table);
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -674,7 +789,7 @@ fn spawn_sse_subscriber(
     ctx: &SseSubscriberCtx<'_>,
     handles: &mut Vec<tokio::task::JoinHandle<()>>,
 ) {
-    let sse_url = format!("{}/app-benchmarks/Message?stream=sse", ctx.base_url);
+    let sse_url = format!("{}/app-benchmarks/{}?stream=sse", ctx.base_url, ctx.message_table);
     let m = ctx.metrics.clone();
     let t = ctx.tracker.clone();
     let s = ctx.stop.clone();
@@ -723,6 +838,383 @@ fn spawn_sse_subscriber(
 
         t.on_disconnect();
     }));
+}
+
+// ── WebSocket Fan-In (publish) test ──
+// N concurrent WebSocket connections each sending messages as fast as possible.
+// Measures server ingestion rate from many concurrent WebSocket writers.
+
+async fn run_ws_publish_test(
+    args: &BenchArgs,
+    auth_user: &str,
+    auth_pass: &str,
+    client: &reqwest::Client,
+    duration: Duration,
+    warmup: Duration,
+    message_table: &str,
+) {
+    let metrics = Arc::new(Metrics::new());
+    let tracker = Arc::new(ConnectionTracker::new());
+    let stop = Arc::new(AtomicBool::new(false));
+
+    let connector = client::build_ws_connector();
+    let total_vus = args.vus;
+
+    tracing::info!("Connecting {} WS publisher clients...", total_vus);
+    let ramp_start = Instant::now();
+    let mut handles = Vec::with_capacity(total_vus as usize);
+
+    // Connect all publisher VUs
+    for batch_start in (0..total_vus).step_by(BATCH_SIZE as usize) {
+        if !should_continue_ramp(&tracker, total_vus) {
+            tracing::info!("Ramp halted at {} due to resource pressure", batch_start);
+            break;
+        }
+
+        let batch_end = (batch_start + BATCH_SIZE).min(total_vus);
+        for _vu in batch_start..batch_end {
+            let ws_url = format!(
+                "{}/app-benchmarks/{}?stream=ws",
+                args.base_url
+                    .replace("https://", "wss://")
+                    .replace("http://", "ws://"),
+                message_table
+            );
+            let m = metrics.clone();
+            let t = tracker.clone();
+            let s = stop.clone();
+            let conn = connector.clone();
+
+            handles.push(tokio::spawn(async move {
+                let ws_result = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    tokio_tungstenite::connect_async_tls_with_config(&ws_url, None, false, Some(conn)),
+                )
+                .await;
+
+                let mut ws = match ws_result {
+                    Ok(Ok((ws, _))) => {
+                        t.on_connect();
+                        ws
+                    },
+                    _ => {
+                        t.on_fail();
+                        return;
+                    },
+                };
+
+                // Each VU sends messages as fast as possible
+                use futures::SinkExt;
+                while !s.load(Ordering::Relaxed) {
+                    let msg = serde_json::json!({
+                        "id": Uuid::new_v4().to_string(),
+                        "title": "bench",
+                        "content": "ws-publish benchmark message",
+                    });
+                    let start = std::time::Instant::now();
+                    match ws
+                        .send(tokio_tungstenite::tungstenite::Message::Text(msg.to_string().into()))
+                        .await
+                    {
+                        Ok(_) => {
+                            let latency_us = start.elapsed().as_micros() as u64;
+                            m.record_success(latency_us, msg.to_string().len() as u64);
+                            t.on_publish();
+                        },
+                        Err(_) => {
+                            m.record_error();
+                            break;
+                        },
+                    }
+                }
+
+                let _ = ws.close(None).await;
+                t.on_disconnect();
+            }));
+        }
+
+        if batch_end < total_vus {
+            tokio::time::sleep(Duration::from_millis(BATCH_DELAY_MS)).await;
+        }
+    }
+
+    metrics
+        .active_vus
+        .store(tracker.connected.load(Ordering::Relaxed), Ordering::Relaxed);
+
+    let ramp_elapsed = ramp_start.elapsed();
+    tracing::info!(
+        "All publishers connected in {:.1}s: {} connected, {} failed",
+        ramp_elapsed.as_secs_f64(),
+        tracker.connected.load(Ordering::Relaxed),
+        tracker.failed.load(Ordering::Relaxed),
+    );
+
+    if !warmup.is_zero() {
+        tracing::info!("Warmup: {}s (metrics discarded)...", warmup.as_secs());
+        tokio::time::sleep(warmup).await;
+    }
+    metrics.set_warming(false);
+    let measure_start = std::time::Instant::now();
+
+    let collector = SnapshotCollector::new(metrics.clone());
+    let collector_handle = collector.start();
+
+    tracing::info!("Measuring for {}s...", duration.as_secs());
+    tokio::time::sleep(duration).await;
+
+    stop.store(true, Ordering::Release);
+
+    let snapshots = collector.finish();
+    let _ = collector_handle.await;
+
+    for h in handles {
+        h.await.ok();
+    }
+
+    let elapsed = measure_start.elapsed().as_secs_f64();
+    print_connection_report("WS-Publish", &tracker, &metrics, elapsed);
+    let extra = connection_extra(&tracker);
+    let rctx = ReportContext {
+        client,
+        base_url: &args.base_url,
+        auth_user,
+        auth_pass,
+    };
+    reporter::report_results_full(
+        &rctx,
+        "ws-publish",
+        elapsed,
+        &metrics.summary(elapsed),
+        Some(extra),
+        &snapshots,
+        total_vus,
+    )
+    .await;
+}
+
+// ── MQTT Fan-Out test ──
+// N MQTT subscribers connect, publishers push via REST → MQTT bridge.
+// Measures concurrent MQTT subscribers and message delivery throughput.
+
+async fn run_mqtt_test(
+    args: &BenchArgs,
+    auth_user: &str,
+    auth_pass: &str,
+    client: &reqwest::Client,
+    duration: Duration,
+    warmup: Duration,
+    message_table: &str,
+) {
+    let metrics = Arc::new(Metrics::new());
+    let tracker = Arc::new(ConnectionTracker::new());
+    let stop = Arc::new(AtomicBool::new(false));
+
+    let total_vus = args.vus;
+    // MQTT topic: {app_id}/{table_name}
+    // MQTT bridge publishes to {app_id}/{table}/{record_id}, subscribe with wildcard
+    let topic = format!("app-benchmarks/{}/#", message_table);
+
+    // Parse host from base_url for MQTT connection
+    let mqtt_host = args.base_url
+        .replace("https://", "")
+        .replace("http://", "")
+        .split(':')
+        .next()
+        .unwrap_or("localhost")
+        .to_string();
+    let mqtt_port = 8883u16;
+
+    tracing::info!(
+        "Connecting {} MQTT subscribers to {}:{} on topic '{}'...",
+        total_vus, mqtt_host, mqtt_port, topic
+    );
+    let ramp_start = Instant::now();
+    let mut handles = Vec::with_capacity(total_vus as usize);
+
+    for batch_start in (0..total_vus).step_by(BATCH_SIZE as usize) {
+        if !should_continue_ramp(&tracker, total_vus) {
+            tracing::info!("Ramp halted at {} due to resource pressure", batch_start);
+            break;
+        }
+
+        let batch_end = (batch_start + BATCH_SIZE).min(total_vus);
+        for vu in batch_start..batch_end {
+            let m = metrics.clone();
+            let t = tracker.clone();
+            let s = stop.clone();
+            let topic = topic.clone();
+            let host = mqtt_host.clone();
+            let user = auth_user.to_string();
+            let pass = auth_pass.to_string();
+
+            handles.push(tokio::spawn(async move {
+                let client_id = format!("bench-{}-{}", vu, &Uuid::new_v4().to_string()[..8]);
+                let mut opts = rumqttc::MqttOptions::new(&client_id, &host, mqtt_port);
+                // Connect anonymously — MqttMessage table has public subscribe/connect access.
+                // Authenticated MQTT connections hit a role deserialization bug with some roles.
+                opts.set_keep_alive(Duration::from_secs(30));
+                opts.set_clean_session(true);
+
+                // TLS for MQTTS (port 8883) — load mkcert CA for self-signed cert validation
+                let home = std::env::var("HOME").unwrap_or_default();
+                let ca_paths = [
+                    format!("{}/Library/Application Support/mkcert/rootCA.pem", home), // macOS mkcert
+                    format!("{}/.local/share/mkcert/rootCA.pem", home),                // Linux mkcert
+                ];
+                let ca_cert = ca_paths.iter()
+                    .find_map(|p| std::fs::read(p).ok())
+                    .unwrap_or_default();
+                if ca_cert.is_empty() {
+                    tracing::warn!("No mkcert CA found — MQTT TLS connections will likely fail");
+                }
+                opts.set_transport(rumqttc::Transport::tls_with_config(
+                    rumqttc::TlsConfiguration::Simple {
+                        ca: ca_cert,
+                        alpn: None,
+                        client_auth: None,
+                    },
+                ));
+
+                let (mqtt_client, mut eventloop) = rumqttc::AsyncClient::new(opts, 64);
+
+                // Subscribe to topic
+                if let Err(e) = mqtt_client
+                    .subscribe(&topic, rumqttc::QoS::AtMostOnce)
+                    .await
+                {
+                    tracing::debug!("MQTT subscribe failed: {}", e);
+                    t.on_fail();
+                    return;
+                }
+
+                let mut connected = false;
+                while !s.load(Ordering::Relaxed) {
+                    match tokio::time::timeout(Duration::from_secs(5), eventloop.poll()).await {
+                        Ok(Ok(rumqttc::Event::Incoming(rumqttc::Packet::ConnAck(_)))) => {
+                            if !connected {
+                                t.on_connect();
+                                connected = true;
+                            }
+                        },
+                        Ok(Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(msg)))) => {
+                            m.record_success(0, msg.payload.len() as u64);
+                        },
+                        Ok(Ok(_)) => {},
+                        Ok(Err(_)) => {
+                            m.record_error();
+                            break;
+                        },
+                        Err(_) => continue, // timeout, retry
+                    }
+                }
+
+                let _ = mqtt_client.disconnect().await;
+                if connected {
+                    t.on_disconnect();
+                }
+            }));
+        }
+
+        if batch_end % 5000 == 0 || batch_end == total_vus {
+            let connected = tracker.connected.load(Ordering::Relaxed);
+            let failed = tracker.failed.load(Ordering::Relaxed);
+            tracing::info!(
+                "  spawned {}/{} (connected={}, failed={})",
+                batch_end, total_vus, connected, failed
+            );
+        }
+
+        if batch_end < total_vus {
+            tokio::time::sleep(Duration::from_millis(BATCH_DELAY_MS)).await;
+        }
+    }
+
+    metrics
+        .active_vus
+        .store(tracker.connected.load(Ordering::Relaxed), Ordering::Relaxed);
+
+    let ramp_elapsed = ramp_start.elapsed();
+    tracing::info!(
+        "MQTT ramp complete in {:.1}s: {} connected, {} failed",
+        ramp_elapsed.as_secs_f64(),
+        tracker.connected.load(Ordering::Relaxed),
+        tracker.failed.load(Ordering::Relaxed),
+    );
+
+    // Publish via REST → MQTT bridge (table writes trigger MQTT notifications)
+    let num_publishers = 4;
+    let mut pub_handles = Vec::new();
+    let pub_url = format!("{}/app-benchmarks/{}", args.base_url, message_table);
+    for _ in 0..num_publishers {
+        let pub_client = client.clone();
+        let pub_user = auth_user.to_string();
+        let pub_pass = auth_pass.to_string();
+        let pub_stop = stop.clone();
+        let pub_tracker = tracker.clone();
+        let pub_url = pub_url.clone();
+        pub_handles.push(tokio::spawn(async move {
+            while !pub_stop.load(Ordering::Relaxed) {
+                let body = serde_json::json!({
+                    "id": Uuid::new_v4().to_string(),
+                    "title": "bench",
+                    "content": "mqtt benchmark message",
+                });
+                let _ = pub_client
+                    .post(&pub_url)
+                    .basic_auth(&pub_user, Some(&pub_pass))
+                    .json(&body)
+                    .send()
+                    .await;
+                pub_tracker.on_publish();
+            }
+        }));
+    }
+
+    if !warmup.is_zero() {
+        tracing::info!("Warmup: {}s (metrics discarded)...", warmup.as_secs());
+        tokio::time::sleep(warmup).await;
+    }
+    metrics.set_warming(false);
+    let measure_start = std::time::Instant::now();
+
+    let collector = SnapshotCollector::new(metrics.clone());
+    let collector_handle = collector.start();
+
+    tracing::info!("Measuring for {}s...", duration.as_secs());
+    tokio::time::sleep(duration).await;
+
+    stop.store(true, Ordering::Release);
+
+    let snapshots = collector.finish();
+    let _ = collector_handle.await;
+
+    for h in pub_handles {
+        h.await.ok();
+    }
+    for h in handles {
+        h.await.ok();
+    }
+
+    let elapsed = measure_start.elapsed().as_secs_f64();
+    print_connection_report("MQTT", &tracker, &metrics, elapsed);
+    let extra = connection_extra(&tracker);
+    let rctx = ReportContext {
+        client,
+        base_url: &args.base_url,
+        auth_user,
+        auth_pass,
+    };
+    reporter::report_results_full(
+        &rctx,
+        "mqtt",
+        elapsed,
+        &metrics.summary(elapsed),
+        Some(extra),
+        &snapshots,
+        total_vus,
+    )
+    .await;
 }
 
 // ── Shared reporting ──

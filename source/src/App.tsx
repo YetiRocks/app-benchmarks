@@ -6,7 +6,7 @@ import { BenchmarkChart } from './components/BenchmarkChart'
 // ── Helpers ──
 
 function formatNumber(n: number): string {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000000) { const v = n / 1000000; return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'M' }
   if (n >= 1000) { const v = n / 1000; return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(n >= 10000 ? 0 : 1)) + 'k' }
   return n.toFixed(0)
 }
@@ -122,20 +122,26 @@ export default function App() {
 
   const startTest = async (testId: string) => {
     setError(null)
+    // Optimistic UI — show seeding immediately, don't wait for server
+    setRunner({ status: 'seeding', phase: 'seeding', testName: testId, startedAt: Date.now() / 1000 })
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = window.setInterval(fetchRunnerState, 1000)
     try {
       const resp = await api('/runner', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ test: testId, targetUrl: savedUrl, vus: testMap[testId]?.vus }),
       })
-      if (resp.ok) {
-        setRunner({ status: 'seeding', phase: 'seeding', testName: testId, startedAt: Date.now() / 1000 })
-        if (pollRef.current) clearInterval(pollRef.current)
-        pollRef.current = window.setInterval(fetchRunnerState, 1000)
-      } else {
+      if (!resp.ok) {
         const data = await resp.json().catch(() => null)
         setError(data?.error || 'Failed to start test')
+        setRunner({ status: 'idle' })
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
       }
-    } catch (e) { setError(`Connection error: ${e}`) }
+    } catch (e) {
+      setError(`Connection error: ${e}`)
+      setRunner({ status: 'idle' })
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
   }
 
   const openHistory = (testId: string, testName: string, isRealtimeTest: boolean) => {
@@ -215,7 +221,7 @@ export default function App() {
                     elapsedSecs={isThisTest ? (runner.elapsedSecs ?? 0) : 0}
                     configuredDuration={isThisTest ? (runner.configuredDuration ?? 0) : 0}
                     onRun={() => startTest(test.id)}
-                    onOpenHistory={() => openHistory(test.id, test.name, test.binary === 'load-realtime')} />
+                    onOpenHistory={() => openHistory(test.id, test.name, test.binary === 'load-realtime' && test.id !== 'ws-publish')} />
                 )
               })}
             </div>
@@ -241,18 +247,29 @@ export default function App() {
                 <div className="empty-state">No runs recorded yet</div>
               ) : (
                 <table className="data-table">
-                  <thead><tr><th>Date</th><th>Clients</th><th>{historyModal.isRealtimeTest ? 'Events/s' : 'RPS'}</th><th>p95</th><th>CV %</th><th>Chart</th></tr></thead>
+                  <thead><tr>
+                    <th>Date</th>
+                    <th>Clients</th>
+                    <th>{historyModal.isRealtimeTest ? 'msg/s' : 'RPS'}</th>
+                    <th>{historyModal.isRealtimeTest ? 'total' : 'p95'}</th>
+                    <th>{historyModal.isRealtimeTest ? 'loss' : 'CV %'}</th>
+                    <th>Chart</th>
+                  </tr></thead>
                   <tbody>
                     {history.map(run => {
                       let parsed: Record<string, number> = {}; try { parsed = JSON.parse(run.results || '{}') } catch { /* ignore */ }
-                      const rps = parsed.throughput ?? 0
+                      const isRT = historyModal.isRealtimeTest
                       return (
                         <tr key={run.id}>
                           <td>{formatDate(run.timestamp)}</td>
                           <td>{parsed.peakConnections != null ? formatNumber(parsed.peakConnections) : run.clients ? formatNumber(run.clients) : '-'}</td>
-                          <td>{formatNumber(rps)}</td>
-                          <td>{parsed.p95 != null ? formatMs(parsed.p95) : '-'}</td>
-                          <td>{parsed.cv != null ? parsed.cv.toFixed(1) : '-'}</td>
+                          <td>{isRT ? formatNumber(parsed.published ?? 0) : formatNumber(parsed.throughput ?? 0)}</td>
+                          <td>{isRT ? formatNumber(parsed.total ?? 0) : (parsed.p95 != null ? formatMs(parsed.p95) : '-')}</td>
+                          <td>{isRT
+                            ? (parsed.total && parsed.peakConnections && parsed.published
+                              ? `${(100 - (parsed.total / (parsed.peakConnections * parsed.published)) * 100).toFixed(1)}%`
+                              : '-')
+                            : (parsed.cv != null ? parsed.cv.toFixed(1) : '-')}</td>
                           <td>{run.snapshots ? <button className="btn btn-sm" onClick={() => { try { setChartSnapshots(JSON.parse(run.snapshots!)); setHistoryView('chart') } catch { /* ignore */ } }}>View</button> : '-'}</td>
                         </tr>
                       )
@@ -294,7 +311,7 @@ interface TestCardProps {
 function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedSecs, configuredDuration, onRun, onOpenHistory }: TestCardProps) {
   const results = latest?.results
   const hasData = !!(results && results.throughput)
-  const isRealtimeTest = test.binary === 'load-realtime'
+  const isRealtimeTest = test.binary === 'load-realtime' && test.id !== 'ws-publish'
 
   const cardClass = ['metric-card bench-card',
     phase === 'seeding' ? 'bench-seeding' : '', phase === 'warming' ? 'bench-warming' : '',
@@ -324,17 +341,17 @@ function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedSecs, co
         <div className="bench-stat">
           <span className={`bench-stat-value${hasData ? '' : ' bench-stat-empty'}`}>
             {hasData ? (isRealtimeTest
-              ? formatNumber(results!.peakConnections && results!.throughput ? Math.round(results!.throughput / results!.peakConnections!) : 0)
+              ? formatNumber(results!.published ?? 0)
               : formatNumber(results!.throughput!))
               : '-'}
           </span>
-          <span className="bench-stat-label">{isRealtimeTest ? 'events/s' : 'RPS'}</span>
+          <span className="bench-stat-label">{isRealtimeTest ? 'msg/s' : 'RPS'}</span>
         </div>
         <div className="bench-stat">
           <span className={`bench-stat-value${hasData ? '' : ' bench-stat-empty'}`}>
-            {hasData ? (isRealtimeTest ? formatNumber(results!.throughput ?? 0) : formatMs(results!.p95 ?? 0)) : '-'}
+            {hasData ? (isRealtimeTest ? formatNumber(results!.total ?? 0) : formatMs(results!.p95 ?? 0)) : '-'}
           </span>
-          <span className="bench-stat-label">{isRealtimeTest ? 'total/s' : 'ms p95'}</span>
+          <span className="bench-stat-label">{isRealtimeTest ? 'total' : 'ms p95'}</span>
         </div>
       </div>
     </div>

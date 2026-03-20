@@ -30,14 +30,14 @@ pub async fn run(args: BenchArgs) {
     match args.test.as_str() {
         "blob-retrieval" => {
             write_phase(&args, "seeding");
-            tracing::info!("Clearing Blob table...");
+            tracing::info!("Clearing BlobData table...");
             clear_tables(
                 &client,
                 &args.base_url,
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Blob"],
+                &["BlobData"],
             )
             .await;
 
@@ -53,7 +53,7 @@ pub async fn run(args: BenchArgs) {
                 "category": "benchmark",
                 "content": large_content,
             });
-            let url = format!("{}/app-benchmarks/Blob/", args.base_url);
+            let url = format!("{}/app-benchmarks/BlobData/", args.base_url);
             match client
                 .post(&url)
                 .basic_auth(&auth_user, Some(&auth_pass))
@@ -92,7 +92,7 @@ pub async fn run(args: BenchArgs) {
                 move |ctx| {
                     let blob_id = blob_id.clone();
                     async move {
-                        let url = format!("{}/app-benchmarks/Blob/{}", ctx.base_url, blob_id);
+                        let url = format!("{}/app-benchmarks/BlobData/{}", ctx.base_url, blob_id);
                         let start = std::time::Instant::now();
                         let result = ctx
                             .client
@@ -131,7 +131,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Blob"],
+                &["BlobData"],
             )
             .await;
         },

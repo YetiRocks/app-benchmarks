@@ -26,36 +26,24 @@ impl TestDef {
     const fn quick(id: &'static str, name: &'static str, binary: &'static str, vus: u64) -> Self {
         Self { id, name, binary, duration: 30, vus, category: "throughput" }
     }
-    const fn sustained(id: &'static str, name: &'static str, binary: &'static str, vus: u64) -> Self {
-        Self { id, name, binary, duration: 300, vus, category: "sustained" }
-    }
 }
 
 const TESTS: &[TestDef] = &[
     TestDef::quick("rest-read", "REST Reads", "load-rest", 100),
     TestDef::quick("rest-write", "REST Writes", "load-rest", 100),
     TestDef::quick("rest-update", "REST Update", "load-rest", 100),
-    TestDef::quick("rest-join", "REST Join", "load-rest", 50),
+    TestDef::quick("rest-join", "REST Join", "load-rest", 100),
     TestDef::quick("graphql-read", "GraphQL Reads", "load-graphql", 100),
-    TestDef::quick("graphql-mutation", "GraphQL Mutations", "load-graphql", 100),
-    TestDef::quick("graphql-join", "GraphQL Join", "load-graphql", 50),
+    TestDef::quick("graphql-mutation", "GraphQL Writes", "load-graphql", 100),
+    TestDef::quick("graphql-update", "GraphQL Updates", "load-graphql", 100),
+    TestDef::quick("graphql-join", "GraphQL Join", "load-graphql", 100),
     TestDef::quick("vector-embed", "Vector Embed", "load-vector", 10),
     TestDef::quick("vector-search", "Vector Search", "load-vector", 100),
     TestDef::quick("blob-retrieval", "150k Blob Retrieval", "load-blob", 100),
-    TestDef::quick("ws", "WebSocket", "load-realtime", 1000),
-    TestDef::quick("sse", "SSE Streaming", "load-realtime", 1000),
-    TestDef::sustained("rest-read-sustained", "REST Reads", "load-rest", 100),
-    TestDef::sustained("rest-write-sustained", "REST Writes", "load-rest", 100),
-    TestDef::sustained("rest-update-sustained", "REST Update", "load-rest", 100),
-    TestDef::sustained("rest-join-sustained", "REST Join", "load-rest", 50),
-    TestDef::sustained("graphql-read-sustained", "GraphQL Reads", "load-graphql", 100),
-    TestDef::sustained("graphql-mutation-sustained", "GraphQL Mutations", "load-graphql", 100),
-    TestDef::sustained("graphql-join-sustained", "GraphQL Join", "load-graphql", 50),
-    TestDef::sustained("vector-embed-sustained", "Vector Embed", "load-vector", 10),
-    TestDef::sustained("vector-search-sustained", "Vector Search", "load-vector", 100),
-    TestDef::sustained("blob-retrieval-sustained", "150k Blob Retrieval", "load-blob", 100),
-    TestDef::sustained("ws-sustained", "WebSocket", "load-realtime", 1000),
-    TestDef::sustained("sse-sustained", "SSE Streaming", "load-realtime", 1000),
+    TestDef::quick("ws", "WS Fan-Out", "load-realtime", 15_000),
+    TestDef::quick("ws-publish", "WS Fan-In", "load-realtime", 100),
+    TestDef::quick("sse", "SSE Fan-Out", "load-realtime", 15_000),
+    TestDef::quick("mqtt", "MQTT Fan-Out", "load-realtime", 15_000),
 ];
 
 // ── Runner state ──
@@ -96,9 +84,9 @@ fn runner_state() -> &'static Mutex<RunnerState> {
     STATE.get_or_init(|| Mutex::new(RunnerState::default()))
 }
 
-fn runner_child() -> &'static Mutex<Option<std::process::Child>> {
-    static CHILD: OnceLock<Mutex<Option<std::process::Child>>> = OnceLock::new();
-    CHILD.get_or_init(|| Mutex::new(None))
+fn runner_children() -> &'static Mutex<Vec<std::process::Child>> {
+    static CHILDREN: OnceLock<Mutex<Vec<std::process::Child>>> = OnceLock::new();
+    CHILDREN.get_or_init(|| Mutex::new(Vec::new()))
 }
 
 fn now_secs() -> f64 {
@@ -139,43 +127,53 @@ resource!(BenchmarkRunner {
         let state = runner_state().lock().unwrap_or_else(|e| e.into_inner()).clone();
         let mut current = state.clone();
 
-        // Check if child process has finished
+        // Check if all child processes have finished
         if current.status != "idle" {
             let mut should_idle = false;
 
-            // Check child process status
-            if let Ok(mut guard) = runner_child().lock() {
-                match guard.as_mut() {
-                    Some(child) => match child.try_wait() {
-                        Ok(Some(status)) => {
-                            if !status.success() {
-                                runner_state().lock().unwrap_or_else(|e| e.into_inner())
-                                    .last_error = Some(format!("Exited with: {}", status));
-                            }
-                            *guard = None;
-                            should_idle = true;
-                        },
-                        Ok(None) => {
-                            // Process still running — but check for timeout
-                            // If started_at + configured_duration + 300s has passed, kill it
-                            if let (Some(started), Some(duration)) = (current.started_at, current.configured_duration) {
-                                let max_time = (current.warmup_duration as f64) + (duration as f64) + 15.0;
-                                if now_secs() - started > max_time {
-                                    let _ = child.kill();
-                                    let _ = child.wait();
-                                    *guard = None;
-                                    should_idle = true;
-                                    runner_state().lock().unwrap_or_else(|e| e.into_inner())
-                                        .last_error = Some("Benchmark timed out".to_string());
-                                }
-                            }
-                        },
-                        Err(_) => { *guard = None; should_idle = true; },
-                    },
-                    None => {
-                        // No child process stored — state is stale, force idle
+            if let Ok(mut children) = runner_children().lock() {
+                if children.is_empty() {
+                    // No children — stale state
+                    should_idle = true;
+                } else {
+                    // Check timeout first
+                    let timed_out = if let (Some(started), Some(duration)) = (current.started_at, current.configured_duration) {
+                        // Account for adaptive duration extension in realtime tests:
+                        // ramp_time (vus/2000) + measurement + warmup + grace
+                        let ramp_estimate = current.configured_vus.unwrap_or(0) as f64 / 2000.0;
+                        let max_time = ramp_estimate + (current.warmup_duration as f64) + (duration as f64) + 60.0;
+                        now_secs() - started > max_time
+                    } else { false };
+
+                    if timed_out {
+                        // Kill all children
+                        for child in children.iter_mut() {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                        }
+                        children.clear();
                         should_idle = true;
-                    },
+                        runner_state().lock().unwrap_or_else(|e| e.into_inner())
+                            .last_error = Some("Benchmark timed out".to_string());
+                    } else {
+                        // Reap finished children, keep running ones
+                        children.retain_mut(|child| {
+                            match child.try_wait() {
+                                Ok(Some(status)) => {
+                                    if !status.success() {
+                                        runner_state().lock().unwrap_or_else(|e| e.into_inner())
+                                            .last_error = Some(format!("Process exited: {}", status));
+                                    }
+                                    false // remove finished child
+                                },
+                                Ok(None) => true, // still running, keep
+                                Err(_) => false,   // error, remove
+                            }
+                        });
+                        if children.is_empty() {
+                            should_idle = true;
+                        }
+                    }
                 }
             }
 
@@ -267,7 +265,8 @@ resource!(BenchmarkRunner {
 
     post(request, ctx) => {
         let body = request.json_value()?;
-        let test_id = body.require_str("test")?;
+        let test_id = body.get("test").and_then(|v| v.as_str())
+            .ok_or_else(|| YetiError::Validation("Missing 'test' field".into()))?;
 
         let test_def = match TESTS.iter().find(|t| t.id == test_id) {
             Some(t) => t,
@@ -291,8 +290,14 @@ resource!(BenchmarkRunner {
         };
 
         let duration = test_def.duration;
-        let vus = body.get("vus").and_then(|v| v.as_u64()).unwrap_or(test_def.vus);
+        let total_vus = body.get("vus").and_then(|v| v.as_u64()).unwrap_or(test_def.vus);
+        // Auto-determine process count: 1 process per 10k VUs, minimum 1
+        const MAX_VUS_PER_PROCESS: u64 = 5_000;
+        let processes = body.get("processes").and_then(|v| v.as_u64())
+            .unwrap_or_else(|| ((total_vus + MAX_VUS_PER_PROCESS - 1) / MAX_VUS_PER_PROCESS).max(1));
+        let vus_per_process = total_vus / processes;
 
+        // First process gets the status file (drives phase transitions)
         let status_file = std::env::temp_dir()
             .join(format!("yeti-bench-{}.status", std::process::id()))
             .to_string_lossy().to_string();
@@ -302,55 +307,76 @@ resource!(BenchmarkRunner {
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
 
-        let mut cmd = std::process::Command::new(&binary_path);
-        cmd.arg("--test").arg(&test_id)
-            .arg("--base-url").arg(&target_url)
-            .arg("--duration").arg(duration.to_string())
-            .arg("--vus").arg(vus.to_string())
-            .arg("--warmup").arg("5")
-            .arg("--status-file").arg(&status_file);
+        let mut spawned: Vec<std::process::Child> = Vec::new();
+        let mut first_pid = 0u32;
 
-        // Close inherited FDs (prevents RocksDB SST file inheritance)
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            unsafe {
-                cmd.pre_exec(|| {
-                    // Close all inherited FDs — RocksDB can open thousands of SST files
-                    for fd in 3..65536 { libc::close(fd); }
-                    Ok(())
-                });
+        for i in 0..processes {
+            // Stagger process launches to avoid overwhelming TLS handshake capacity.
+            // Each process ramps at ~1000 conn/sec, so stagger by vus_per_process/1000 seconds.
+            if i > 0 {
+                let stagger_ms = (vus_per_process as f64 / 1.0).min(5000.0) as u64;
+                std::thread::sleep(std::time::Duration::from_millis(stagger_ms));
+            }
+            let mut cmd = std::process::Command::new(&binary_path);
+            cmd.arg("--test").arg(&test_id)
+                .arg("--base-url").arg(&target_url)
+                .arg("--duration").arg(duration.to_string())
+                .arg("--vus").arg(vus_per_process.to_string())
+                .arg("--warmup").arg("5");
+
+            // Only the first process writes the status file and reports results
+            if i == 0 {
+                cmd.arg("--status-file").arg(&status_file);
+            }
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                unsafe {
+                    cmd.pre_exec(|| {
+                        for fd in 3..4096 { libc::close(fd); }
+                        Ok(())
+                    });
+                }
+            }
+
+            match cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn() {
+                Ok(child) => {
+                    if i == 0 { first_pid = child.id(); }
+                    spawned.push(child);
+                },
+                Err(e) => {
+                    // Kill any already-spawned children
+                    for mut c in spawned { let _ = c.kill(); let _ = c.wait(); }
+                    let _ = std::fs::remove_file(&status_file);
+                    let mut state = runner_state().lock().unwrap_or_else(|e| e.into_inner());
+                    state.status = "idle".to_string();
+                    state.last_error = Some(format!("Failed to start process {}: {}", i, e));
+                    return bad_request(&format!("Failed to start benchmark: {}", e));
+                },
             }
         }
 
-        match cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn() {
-            Ok(child) => {
-                let pid = child.id();
-                *runner_child().lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
-                let mut state = runner_state().lock().unwrap_or_else(|e| e.into_inner());
-                state.status = "seeding".to_string();
-                state.test_name = Some(test_id.to_string());
-                state.started_at = Some(now_secs());
-                state.configured_duration = Some(duration);
-                state.configured_vus = Some(vus);
-                state.warmup_duration = 5;
-                state.last_error = None;
-                state.child_pid = Some(pid);
-                state.status_file = Some(status_file);
+        let num_spawned = spawned.len();
+        *runner_children().lock().unwrap_or_else(|e| e.into_inner()) = spawned;
+        let mut state = runner_state().lock().unwrap_or_else(|e| e.into_inner());
+        state.status = "seeding".to_string();
+        state.test_name = Some(test_id.to_string());
+        state.started_at = Some(now_secs());
+        state.configured_duration = Some(duration);
+        state.configured_vus = Some(total_vus);
+        state.warmup_duration = 5;
+        state.last_error = None;
+        state.child_pid = Some(first_pid);
+        state.status_file = Some(status_file);
 
-                reply().json(json!({
-                    "status": "seeding",
-                    "testName": test_id,
-                    "pid": pid,
-                }))
-            },
-            Err(e) => {
-                let _ = std::fs::remove_file(&status_file);
-                let mut state = runner_state().lock().unwrap_or_else(|e| e.into_inner());
-                state.status = "idle".to_string();
-                state.last_error = Some(format!("Failed to start '{}': {}", binary_path, e));
-                bad_request(&format!("Failed to start benchmark: {}", e))
-            },
-        }
+        reply().json(json!({
+            "status": "seeding",
+            "testName": test_id,
+            "processes": num_spawned,
+            "vusPerProcess": vus_per_process,
+            "totalVus": total_vus,
+            "pid": first_pid,
+        }))
     }
 });

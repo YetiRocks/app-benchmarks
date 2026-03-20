@@ -7,16 +7,17 @@ use crate::{
 };
 use std::sync::Arc;
 use std::time::Duration;
+use rand;
 use uuid::Uuid;
 
 /// Ensure a benchmark Author record exists for join tests.
-async fn seed_author(client: &reqwest::Client, base_url: &str, auth_user: &str, auth_pass: &str) {
+async fn seed_author(table: &str, client: &reqwest::Client, base_url: &str, auth_user: &str, auth_pass: &str) {
     let body = serde_json::json!({
         "id": "bench-author-1",
         "name": "Benchmark Author",
     });
     let _ = client
-        .post(format!("{}/app-benchmarks/Author/", base_url))
+        .post(format!("{}/app-benchmarks/{}/", base_url, table))
         .basic_auth(auth_user, Some(auth_pass))
         .json(&body)
         .send()
@@ -25,6 +26,7 @@ async fn seed_author(client: &reqwest::Client, base_url: &str, auth_user: &str, 
 
 /// Seed N Book records via GraphQL mutations for read tests.
 async fn seed_books_graphql(
+    book_type: &str,
     client: &reqwest::Client,
     base_url: &str,
     auth_user: &str,
@@ -32,11 +34,12 @@ async fn seed_books_graphql(
     count: usize,
 ) {
     let url = format!("{}/app-benchmarks/graphql", base_url);
+    let create_fn = format!("create{}", book_type);
     for i in 0..count {
         let id = Uuid::new_v4().to_string();
         let mutation = format!(
-            r#"mutation {{ createBook(input: {{ id: "{}", title: "Seed Book {}", isbn: "978-{:010}", genre: "benchmark", price: 9.99, authorId: "bench-author-1" }}) {{ id }} }}"#,
-            id, i, i
+            r#"mutation {{ {}(input: {{ id: "{}", title: "Seed Book {}", price: 9.99, authorId: "bench-author-1" }}) {{ id }} }}"#,
+            create_fn, id, i
         );
         let query = serde_json::json!({ "query": mutation });
         let _ = client
@@ -46,7 +49,7 @@ async fn seed_books_graphql(
             .send()
             .await;
     }
-    tracing::info!("Seeded {} Book records via GraphQL", count);
+    tracing::info!("Seeded {} {} records via GraphQL", count, book_type);
 }
 
 pub async fn run(args: BenchArgs) {
@@ -70,6 +73,8 @@ pub async fn run(args: BenchArgs) {
 
     match args.test.as_str() {
         "graphql-read" | "graphql-read-ramp" | "graphql-read-sustained" => {
+            let book_table = "GqlReadBook";
+            let author_table = "GqlReadAuthor";
             write_phase(&args, "seeding");
             clear_tables(
                 &client,
@@ -77,26 +82,28 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Book", "Author"],
+                &[book_table, author_table],
             )
             .await;
-            seed_author(&client, &args.base_url, &auth_user, &auth_pass).await;
-            seed_books_graphql(&client, &args.base_url, &auth_user, &auth_pass, 1000).await;
-            let ids = fetch_book_ids(&client, &args.base_url, &auth_user, &auth_pass, 1000).await;
+            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
+            seed_books_graphql(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
+            let ids = fetch_book_ids(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
             if ids.is_empty() {
-                tracing::error!("Failed to seed Book records.");
+                tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
             }
-            tracing::info!("Setup: {} Book IDs ready for read test", ids.len());
+            tracing::info!("Setup: {} {} IDs ready for read test", ids.len(), book_table);
             let ids = Arc::new(ids);
 
+            let book_table_owned = book_table.to_string();
             let scenario = move |ctx: Arc<runner::ScenarioContext>| {
                 let ids = ids.clone();
+                let book_table = book_table_owned.clone();
                 async move {
                     let idx = ctx.next_request_idx() as usize % ids.len();
                     let id = &ids[idx];
                     let query = serde_json::json!({
-                        "query": format!("{{ Book(id: \"{}\") {{ id title isbn genre price }} }}", id)
+                        "query": format!("{{ {}(id: \"{}\") {{ id title price }} }}", book_table, id)
                     });
                     let url = format!("{}/app-benchmarks/graphql", ctx.base_url);
                     let start = std::time::Instant::now();
@@ -167,24 +174,27 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Book", "Author"],
+                &[book_table, author_table],
             )
             .await;
         },
         "graphql-mutation" => {
+            let book_table = "GqlWriteBook";
+            let author_table = "GqlWriteAuthor";
             write_phase(&args, "seeding");
-            tracing::info!("Clearing Book + Author tables...");
+            tracing::info!("Clearing {} + {} tables...", book_table, author_table);
             clear_tables(
                 &client,
                 &args.base_url,
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Book", "Author"],
+                &[book_table, author_table],
             )
             .await;
 
             write_phase(&args, "warming");
+            let book_table_owned = book_table.to_string();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -195,23 +205,27 @@ pub async fn run(args: BenchArgs) {
                     auth_user: auth_user.clone(),
                     auth_pass: auth_pass.clone(),
                 },
-                |ctx| async move {
-                    let id = Uuid::new_v4().to_string();
-                    let mutation = format!(
-                        r#"mutation {{ createBook(input: {{ id: "{}", title: "GQL Bench {}", isbn: "978-{}", genre: "benchmark", price: 9.99 }}) {{ id }} }}"#,
-                        id, &id[..8], &id[..10]
-                    );
-                    let query = serde_json::json!({ "query": mutation });
-                    let url = format!("{}/app-benchmarks/graphql", ctx.base_url);
-                    let start = std::time::Instant::now();
-                    let result = ctx
-                        .client
-                        .post(&url)
-                        .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
-                        .json(&query)
-                        .send()
-                        .await;
-                    ctx.record_response(start, result).await;
+                move |ctx| {
+                    let book_table = book_table_owned.clone();
+                    async move {
+                        let id = Uuid::new_v4().to_string();
+                        let create_fn = format!("create{}", book_table);
+                        let mutation = format!(
+                            r#"mutation {{ {}(input: {{ id: "{}", title: "GQL Bench {}", price: 9.99, authorId: "bench-author-1" }}) {{ id }} }}"#,
+                            create_fn, id, &id[..8]
+                        );
+                        let query = serde_json::json!({ "query": mutation });
+                        let url = format!("{}/app-benchmarks/graphql", ctx.base_url);
+                        let start = std::time::Instant::now();
+                        let result = ctx
+                            .client
+                            .post(&url)
+                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                            .json(&query)
+                            .send()
+                            .await;
+                        ctx.record_response(start, result).await;
+                    }
                 },
             )
             .await;
@@ -241,11 +255,73 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Book", "Author"],
+                &[book_table, author_table],
             )
             .await;
         },
+        "graphql-update" => {
+            let book_table = "GqlUpdateBook";
+            write_phase(&args, "seeding");
+            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+
+            // Seed records to update
+            let record_count = 1000;
+            let record_ids: Vec<String> = (0..record_count).map(|_| Uuid::new_v4().to_string()).collect();
+            tracing::info!("Seeding {} records for update test...", record_count);
+            let create_fn = format!("create{}", book_table);
+            for id in &record_ids {
+                let mutation = format!(
+                    r#"mutation {{ {}(input: {{ id: "{}", title: "Update Bench {}", price: 10.0, authorId: "bench-author-1" }}) {{ id }} }}"#,
+                    create_fn, id, &id[..8]
+                );
+                let _ = client.post(format!("{}/app-benchmarks/graphql", args.base_url))
+                    .basic_auth(&auth_user, Some(&auth_pass))
+                    .json(&serde_json::json!({ "query": mutation }))
+                    .send().await;
+            }
+            tracing::info!("Seeded {} records", record_count);
+            let ids = Arc::new(record_ids);
+
+            write_phase(&args, "warming");
+            let book_table_owned = book_table.to_string();
+            let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
+                args.vus, duration, warmup,
+                LoadTestConfig { client: client.clone(), base_url: args.base_url.clone(), auth_user: auth_user.clone(), auth_pass: auth_pass.clone() },
+                move |ctx| {
+                    let ids = ids.clone();
+                    let book_table = book_table_owned.clone();
+                    async move {
+                        let idx = ctx.next_request_idx() as usize % ids.len();
+                        let id = &ids[idx];
+                        let update_fn = format!("update{}", book_table);
+                        let price: f64 = rand::random::<f64>() * 100.0;
+                        let mutation = format!(
+                            r#"mutation {{ {}(id: "{}", input: {{ price: {:.2} }}) {{ id }} }}"#,
+                            update_fn, id, price
+                        );
+                        let query = serde_json::json!({ "query": mutation });
+                        let url = format!("{}/app-benchmarks/graphql", ctx.base_url);
+                        let start = std::time::Instant::now();
+                        let result = ctx.client.post(&url)
+                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
+                            .json(&query).send().await;
+                        ctx.record_response(start, result).await;
+                    }
+                },
+            ).await;
+            let summary = metrics.summary(elapsed);
+            crate::common::validate_error_rate(&summary);
+            reporter::report_results_with_snapshots(
+                &ReportContext { client: &client, base_url: &args.base_url, auth_user: &auth_user, auth_pass: &auth_pass },
+                "graphql-update", elapsed, &summary, &snapshots, args.vus,
+            ).await;
+
+            write_phase(&args, "cleaning");
+            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+        },
         "graphql-join" => {
+            let book_table = "GqlJoinBook";
+            let author_table = "GqlJoinAuthor";
             write_phase(&args, "seeding");
             clear_tables(
                 &client,
@@ -253,20 +329,21 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Book", "Author"],
+                &[book_table, author_table],
             )
             .await;
-            seed_author(&client, &args.base_url, &auth_user, &auth_pass).await;
-            seed_books_graphql(&client, &args.base_url, &auth_user, &auth_pass, 1000).await;
-            let ids = fetch_book_ids(&client, &args.base_url, &auth_user, &auth_pass, 1000).await;
+            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
+            seed_books_graphql(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
+            let ids = fetch_book_ids(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
             if ids.is_empty() {
-                tracing::error!("Failed to seed Book records.");
+                tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
             }
-            tracing::info!("Setup: {} Book IDs ready for join test", ids.len());
+            tracing::info!("Setup: {} {} IDs ready for join test", ids.len(), book_table);
             let ids = Arc::new(ids);
 
             write_phase(&args, "warming");
+            let book_table_owned = book_table.to_string();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -279,12 +356,13 @@ pub async fn run(args: BenchArgs) {
                 },
                 move |ctx| {
                     let ids = ids.clone();
+                    let book_table = book_table_owned.clone();
                     async move {
                         let idx = ctx.next_request_idx() as usize % ids.len();
                         let id = &ids[idx];
                         let query_str = format!(
-                            r#"{{ Book(id: "{}") {{ id title author {{ name }} }} }}"#,
-                            id
+                            r#"{{ {}(id: "{}") {{ id title author {{ name }} }} }}"#,
+                            book_table, id
                         );
                         let query = serde_json::json!({ "query": query_str });
                         let url = format!("{}/app-benchmarks/graphql", ctx.base_url);
@@ -327,7 +405,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
-                &["Book", "Author"],
+                &[book_table, author_table],
             )
             .await;
         },

@@ -9,22 +9,82 @@ type TestRun @table(database: "app-benchmarks") @export(mqtt: false, public: [re
     snapshots: String
 }
 
-type Book @table(database: "app-benchmarks", residency: "sharded") @export(mqtt: false, public: [read, create, update, delete]) {
+# ── REST Read tables ──
+type ReadBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
     id: ID!
     title: String!
-    isbn: String! @indexed
-    genre: String @indexed
     price: Float
-    authorId: ID! @indexed
-    author: Author @relationship(from: "authorId")
+    authorId: ID!
 }
 
-type Author @table(database: "app-benchmarks", residency: "sharded") @export(mqtt: false, public: [read, create, update, delete]) {
+# ── REST Write tables ──
+type WriteBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
+# ── REST Update tables ──
+type UpdateBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
+# ── REST Join tables ──
+type JoinBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+    author: JoinAuthor @relationship(from: "authorId")
+}
+type JoinAuthor @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
     id: ID!
     name: String!
 }
 
-type Article @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
+# ── GraphQL Read tables ──
+type GqlReadBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
+# ── GraphQL Write tables ──
+type GqlWriteBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
+# ── GraphQL Update tables ──
+type GqlUpdateBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+}
+
+# ── GraphQL Join tables ──
+type GqlJoinBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    title: String!
+    price: Float
+    authorId: ID!
+    author: GqlJoinAuthor @relationship(from: "authorId")
+}
+type GqlJoinAuthor @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    name: String!
+}
+
+# ── Vector tables ──
+type EmbedArticle @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
     id: ID!
     title: String!
     author: String!
@@ -33,7 +93,17 @@ type Article @table(database: "app-benchmarks") @export(mqtt: false, public: [re
     embedding: Vector @indexed(source: "content")
 }
 
-type Blob @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
+type SearchArticle @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
+    id: ID!
+    title: String!
+    author: String!
+    category: String! @indexed
+    content: String!
+    embedding: Vector @indexed(source: "content")
+}
+
+# ── Blob table ──
+type BlobData @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, delete]) {
     id: ID!
     title: String!
     author: String!
@@ -41,12 +111,39 @@ type Blob @table(database: "app-benchmarks") @export(mqtt: false, public: [read,
     content: String!
 }
 
-type Message @table(database: "app-benchmarks") @export(
-    rest: true
-    sse: true
-    ws: true
-    mqtt: false
+# ── Realtime tables ──
+type WsMessage @table(database: "app-benchmarks") @export(
+    rest: true, sse: true, ws: true, mqtt: false
     public: [read, create, delete, subscribe, connect]
+) {
+    id: ID!
+    title: String!
+    content: String!
+}
+
+type SseMessage @table(database: "app-benchmarks") @export(
+    rest: true, sse: true, ws: true, mqtt: false
+    public: [read, create, delete, subscribe, connect]
+) {
+    id: ID!
+    title: String!
+    content: String!
+}
+
+# ── WebSocket Fan-In (publish) tables ──
+type WsPublishMessage @table(database: "app-benchmarks") @export(
+    rest: true, sse: true, ws: true, mqtt: false
+    public: [read, create, delete, subscribe, connect, publish]
+) {
+    id: ID!
+    title: String!
+    content: String!
+}
+
+# ── MQTT tables ──
+type MqttMessage @table(database: "app-benchmarks") @export(
+    rest: true, sse: false, ws: false, mqtt: true
+    public: [read, create, delete, subscribe, connect, publish]
 ) {
     id: ID!
     title: String!
