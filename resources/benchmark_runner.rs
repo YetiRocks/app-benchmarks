@@ -252,17 +252,24 @@ resource!(BenchmarkRunner {
             }
         } else { 0.0 };
 
-        reply().json(json!({
-            "status": current.status,
-            "phase": current.status,
-            "testName": current.test_name,
-            "warmupSecs": if current.status == "warming" {
-                current.warming_started_at.map(|s| now_secs() - s).unwrap_or(0.0)
-            } else { 0.0 },
-            "elapsedSecs": elapsed,
-            "configuredDuration": current.configured_duration,
-            "lastError": current.last_error,
-        }))
+        // Signal the host to suppress or restore telemetry based on benchmark state.
+        // Plugins can't set the host's telemetry flag directly (dylib boundary), so
+        // we use a response header that the dynamic router intercepts.
+        let suppress = current.status != "idle";
+
+        reply()
+            .header("x-yeti-suppress-telemetry", if suppress { "true" } else { "false" })
+            .json(json!({
+                "status": current.status,
+                "phase": current.status,
+                "testName": current.test_name,
+                "warmupSecs": if current.status == "warming" {
+                    current.warming_started_at.map(|s| now_secs() - s).unwrap_or(0.0)
+                } else { 0.0 },
+                "elapsedSecs": elapsed,
+                "configuredDuration": current.configured_duration,
+                "lastError": current.last_error,
+            }))
     },
 
     post(request, ctx) => {
@@ -372,13 +379,15 @@ resource!(BenchmarkRunner {
         state.child_pid = Some(first_pid);
         state.status_file = Some(status_file);
 
-        reply().json(json!({
-            "status": "seeding",
-            "testName": test_id,
-            "processes": num_spawned,
-            "vusPerProcess": vus_per_process,
-            "totalVus": total_vus,
-            "pid": first_pid,
-        }))
+        reply()
+            .header("x-yeti-suppress-telemetry", "true")
+            .json(json!({
+                "status": "seeding",
+                "testName": test_id,
+                "processes": num_spawned,
+                "vusPerProcess": vus_per_process,
+                "totalVus": total_vus,
+                "pid": first_pid,
+            }))
     }
 });
