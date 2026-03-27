@@ -1,7 +1,8 @@
 name: "Yeti Benchmarks"
 app_id: "app-benchmarks"
 version: "0.1.0"
-require_super_user: true
+customer_id: "yeti"
+required_roles: [yeti_admin]
 
 static_files:
   path: web
@@ -31,4 +32,4 @@ auth:
     rules:
       - strategy: email
         pattern: "*@yetirocks.com"
-        role: super_user
+        role: yeti_admin
