@@ -6,6 +6,9 @@ require_super_user: true
 static_files:
   path: web
   spa: true
+  build:
+    sourceDir: source
+    command: npm run build
 
 schemas:
   - schema.graphql
