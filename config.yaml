@@ -5,8 +5,7 @@ require_super_user: true
 
 static_files:
   path: web
-  route: /
-  index: index.html
+  spa: true
 
 schemas:
   - schema.graphql
