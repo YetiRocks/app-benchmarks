@@ -1,7 +1,7 @@
 name: "Yeti Benchmarks"
 app_id: "app-benchmarks"
 version: "0.1.0"
-# Auth handled per-table via @export(public: [...]) directives in schema
+require_super_user: true
 
 static_files:
   path: web
@@ -20,3 +20,13 @@ binaries:
 modules:
   - "modules/*.rs"
 
+auth:
+  methods: [oauth]
+  oauth:
+    google:
+      clientId: "${GOOGLE_CLIENT_ID}"
+      clientSecret: "${GOOGLE_CLIENT_SECRET}"
+    rules:
+      - strategy: email
+        pattern: "*@yetirocks.com"
+        role: super_user
