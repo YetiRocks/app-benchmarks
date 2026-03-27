@@ -2,7 +2,10 @@
 
 /* ── CSS Variables ── */
 :root {
-  --color-black: #1A1714;
+  --color-black: #0e0e0e;
+  --color-black-blue: #0a0e14;
+  --color-black-green: #0a120a;
+  --color-black-brown: #120e0a;
   --color-white: #dddddd;
   --color-grey: #666666;
   --color-black-overlay: rgba(0, 0, 0, 0.2);
@@ -164,12 +167,13 @@ body {
 }
 
 .footer a {
-  color: var(--color-grey);
-  text-decoration: none;
+  color: var(--color-white);
+  text-decoration: underline;
 }
 
 .footer a:hover {
   color: var(--color-white);
+  opacity: 0.8;
 }
 
 /* ── Header (73px, legacy) ── */
@@ -324,8 +328,8 @@ body {
 }
 
 .modal-content {
-  background: var(--color-black);
-  border: 1px solid var(--color-border-primary);
+  background: var(--color-black-overlay);
+  border: none;
   border-radius: var(--radius-lg);
   padding: var(--space-8);
   max-width: 420px;
@@ -353,12 +357,13 @@ body {
 }
 
 .btn-cancel {
-  background: var(--color-white-overlay);
-  border-color: var(--color-border-primary);
+  background: var(--color-black-overlay);
+  border: none;
 }
 
 .btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-black-overlay);
+  border: none;
 }
 
 .btn-delete {
@@ -532,7 +537,7 @@ body {
 
 /* ── JSON syntax highlighting ── */
 .json-key { color: #9cdcfe; }
-.json-string { color: #a8785a; }
+.json-string { color: #5a8a7a; }
 .json-number { color: #b5cea8; }
 .json-boolean { color: #5bc0de; }
 .json-null { color: #5bc0de; }

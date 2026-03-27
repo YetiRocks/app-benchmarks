@@ -42,7 +42,42 @@ function ListIcon() {
 
 // ── App ──
 
-export default function App() {
+function useAuth() {
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetch('/yeti-auth/oauth_user', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setAuthenticated(!!(data?.user)))
+      .catch(() => setAuthenticated(false))
+  }, [])
+  return authenticated
+}
+
+function LoginPage() {
+  const handleLogin = () => {
+    window.location.href = `/yeti-auth/oauth_login?provider=google&redirect_uri=/app-benchmarks/&app_id=app-benchmarks`
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0e0e0e' }}>
+      <div style={{ textAlign: 'center' }}>
+        <img src={`${import.meta.env.BASE_URL}logo_white.svg`} alt="Yeti" style={{ width: '200px', marginBottom: '2rem' }} />
+        <div>
+          <button onClick={handleLogin} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '10px',
+            padding: '12px 24px', fontSize: '14px', fontWeight: 600,
+            color: '#ddd', background: 'rgba(36,41,46,0.5)',
+            border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BenchmarkApp() {
   // tests keyed by id, with best metrics if available
   const [testMap, setTestMap] = useState<Record<string, TestDef & { best?: Record<string, unknown> }>>({})
   const [categories, setCategories] = useState<CategoryDef[]>([])
@@ -357,4 +392,11 @@ function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedSecs, co
       </div>
     </div>
   )
+}
+
+export default function App() {
+  const authenticated = useAuth()
+  if (authenticated === null) return <div className="empty-state">Loading...</div>
+  if (!authenticated) return <LoginPage />
+  return <BenchmarkApp />
 }
