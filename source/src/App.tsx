@@ -45,10 +45,20 @@ function ListIcon() {
 function useAuth() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null)
   useEffect(() => {
-    fetch('/yeti-auth/oauth_user', { credentials: 'same-origin' })
+    // Check if auth is configured before gating
+    fetch('/yeti-auth/oauth_providers?app_id=app-benchmarks')
       .then(r => r.ok ? r.json() : null)
-      .then(data => setAuthenticated(!!(data?.user)))
-      .catch(() => setAuthenticated(false))
+      .then(data => {
+        if (!data?.providers?.length) {
+          // No auth configured — skip gate
+          setAuthenticated(true)
+          return
+        }
+        return fetch('/yeti-auth/oauth_user', { credentials: 'same-origin' })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => setAuthenticated(!!(d?.user)))
+      })
+      .catch(() => setAuthenticated(true))
   }, [])
   return authenticated
 }
