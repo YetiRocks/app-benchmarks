@@ -312,23 +312,31 @@ resource!(BenchmarkRunner {
             .to_string_lossy().to_string();
         let _ = std::fs::write(&status_file, "seeding");
 
-        let target_url = body.get("targetUrl").and_then(|v| v.as_str()).map(String::from)
+        let target_raw = body.get("targetUrl").and_then(|v| v.as_str()).map(String::from)
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
+
+        // Support comma-delimited target URLs: processes are distributed round-robin
+        let targets: Vec<&str> = target_raw.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+
+        // Ensure at least as many processes as targets so each target gets load
+        let processes = processes.max(targets.len() as u64);
+        let vus_per_process = total_vus / processes;
 
         let mut spawned: Vec<std::process::Child> = Vec::new();
         let mut first_pid = 0u32;
 
         for i in 0..processes {
+            let target_url = targets[i as usize % targets.len()];
+
             // Stagger process launches to avoid overwhelming TLS handshake capacity.
-            // Each process ramps at ~1000 conn/sec, so stagger by vus_per_process/1000 seconds.
             if i > 0 {
                 let stagger_ms = (vus_per_process as f64 / 1.0).min(5000.0) as u64;
                 std::thread::sleep(std::time::Duration::from_millis(stagger_ms));
             }
             let mut cmd = std::process::Command::new(&binary_path);
             cmd.arg("--test").arg(&test_id)
-                .arg("--base-url").arg(&target_url)
+                .arg("--base-url").arg(target_url)
                 .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(vus_per_process.to_string())
