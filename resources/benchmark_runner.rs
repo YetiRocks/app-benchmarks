@@ -329,6 +329,7 @@ resource!(BenchmarkRunner {
             let mut cmd = std::process::Command::new(&binary_path);
             cmd.arg("--test").arg(&test_id)
                 .arg("--base-url").arg(&target_url)
+                .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(vus_per_process.to_string())
                 .arg("--warmup").arg("5");

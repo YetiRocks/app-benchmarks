@@ -47,6 +47,10 @@ pub struct BenchArgs {
     #[arg(long, default_value = "200")]
     pub max_vus: u64,
 
+    /// URL to POST results to (defaults to https://localhost, i.e. the local server)
+    #[arg(long, default_value = "https://localhost")]
+    pub report_url: String,
+
     /// Path to a file where the binary writes its current phase (seeding/warming/running/cleaning)
     #[arg(long)]
     pub status_file: Option<String>,

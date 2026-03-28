@@ -158,7 +158,7 @@ pub async fn run(args: BenchArgs) {
             validate_error_rate(&summary);
             let rctx = ReportContext {
                 client: &client,
-                base_url: &args.base_url,
+                base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
             };
@@ -234,7 +234,7 @@ pub async fn run(args: BenchArgs) {
             validate_error_rate(&summary);
             let rctx = ReportContext {
                 client: &client,
-                base_url: &args.base_url,
+                base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
             };
@@ -298,7 +298,7 @@ pub async fn run(args: BenchArgs) {
 
             let summary = metrics.summary(elapsed);
             validate_error_rate(&summary);
-            let rctx = ReportContext { client: &client, base_url: &args.base_url, auth_user: &auth_user, auth_pass: &auth_pass };
+            let rctx = ReportContext { client: &client, base_url: &args.report_url, auth_user: &auth_user, auth_pass: &auth_pass };
             reporter::report_results_with_snapshots(&rctx, "graphql-batch-write", elapsed, &summary, &snapshots, args.vus).await;
 
             write_phase(&args, "cleaning");
@@ -357,7 +357,7 @@ pub async fn run(args: BenchArgs) {
             let summary = metrics.summary(elapsed);
             crate::common::validate_error_rate(&summary);
             reporter::report_results_with_snapshots(
-                &ReportContext { client: &client, base_url: &args.base_url, auth_user: &auth_user, auth_pass: &auth_pass },
+                &ReportContext { client: &client, base_url: &args.report_url, auth_user: &auth_user, auth_pass: &auth_pass },
                 "graphql-update", elapsed, &summary, &snapshots, args.vus,
             ).await;
 
@@ -429,7 +429,7 @@ pub async fn run(args: BenchArgs) {
             validate_error_rate(&summary);
             let rctx = ReportContext {
                 client: &client,
-                base_url: &args.base_url,
+                base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
             };

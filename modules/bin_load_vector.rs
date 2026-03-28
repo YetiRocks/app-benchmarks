@@ -116,7 +116,7 @@ pub async fn run(args: BenchArgs) {
             validate_error_rate(&summary);
             let rctx = ReportContext {
                 client: &client,
-                base_url: &args.base_url,
+                base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
             };
@@ -225,7 +225,7 @@ pub async fn run(args: BenchArgs) {
             validate_error_rate(&summary);
             let rctx = ReportContext {
                 client: &client,
-                base_url: &args.base_url,
+                base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
             };

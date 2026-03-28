@@ -622,7 +622,7 @@ async fn run_sse_test(
 
     let initial = if is_ramp { initial_vus } else { total_vus };
     let sse_ctx = SseSubscriberCtx {
-        base_url: &args.base_url,
+        base_url: &args.report_url,
         auth_user,
         auth_pass,
         sse_client: &sse_client,
@@ -769,7 +769,7 @@ async fn run_sse_test(
     let extra = connection_extra(&tracker);
     let rctx = ReportContext {
         client,
-        base_url: &args.base_url,
+        base_url: &args.report_url,
         auth_user,
         auth_pass,
     };
@@ -977,7 +977,7 @@ async fn run_ws_publish_test(
     let extra = connection_extra(&tracker);
     let rctx = ReportContext {
         client,
-        base_url: &args.base_url,
+        base_url: &args.report_url,
         auth_user,
         auth_pass,
     };
@@ -1201,7 +1201,7 @@ async fn run_mqtt_test(
     let extra = connection_extra(&tracker);
     let rctx = ReportContext {
         client,
-        base_url: &args.base_url,
+        base_url: &args.report_url,
         auth_user,
         auth_pass,
     };
