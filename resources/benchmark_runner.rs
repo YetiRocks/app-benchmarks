@@ -316,27 +316,17 @@ resource!(BenchmarkRunner {
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
 
-        // Support comma-delimited target URLs: each target gets full VU count
-        let targets: Vec<&str> = target_raw.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-
-        // One process per target, each with the full VU count
-        let processes = targets.len() as u64;
+        // Single process handles all targets (VUs distributed round-robin inside the binary)
+        let processes = 1u64;
         let vus_per_process = total_vus;
 
         let mut spawned: Vec<std::process::Child> = Vec::new();
         let mut first_pid = 0u32;
 
         for i in 0..processes {
-            let target_url = targets[i as usize % targets.len()];
-
-            // Stagger process launches to avoid overwhelming TLS handshake capacity.
-            if i > 0 {
-                let stagger_ms = (vus_per_process as f64 / 1.0).min(5000.0) as u64;
-                std::thread::sleep(std::time::Duration::from_millis(stagger_ms));
-            }
             let mut cmd = std::process::Command::new(&binary_path);
             cmd.arg("--test").arg(&test_id)
-                .arg("--base-url").arg(target_url)
+                .arg("--base-url").arg(&target_raw)
                 .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(vus_per_process.to_string())

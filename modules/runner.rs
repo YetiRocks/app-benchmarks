@@ -38,6 +38,10 @@ where
         auth_user,
         auth_pass,
     } = config;
+
+    // Support comma-separated URLs: distribute VUs round-robin across targets
+    let base_urls: Vec<String> = base_url.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+
     let metrics = Arc::new(Metrics::new());
     metrics.active_vus.store(vus, Ordering::Relaxed);
     let scenario_fn = Arc::new(scenario_fn);
@@ -47,9 +51,10 @@ where
     let mut join_set = JoinSet::new();
 
     for vu_id in 0..vus {
+        let target_url = base_urls[vu_id as usize % base_urls.len()].clone();
         let ctx = Arc::new(ScenarioContext {
             client: client.clone(),
-            base_url: base_url.clone(),
+            base_url: target_url,
             auth_user: auth_user.clone(),
             auth_pass: auth_pass.clone(),
             metrics: metrics.clone(),
