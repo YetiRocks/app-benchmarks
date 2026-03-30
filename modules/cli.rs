@@ -76,6 +76,11 @@ impl BenchArgs {
         self.base_url.split(',').next().unwrap_or(&self.base_url).trim()
     }
 
+    /// All target URLs
+    pub fn all_urls(&self) -> Vec<&str> {
+        self.base_url.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
+    }
+
     pub fn is_ramp(&self) -> bool {
         self.mode == "ramp"
     }

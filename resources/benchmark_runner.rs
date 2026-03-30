@@ -316,9 +316,10 @@ resource!(BenchmarkRunner {
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
 
-        // Single process handles all targets (VUs distributed round-robin inside the binary)
+        // Single process, VUs scale with target count (100 VUs × 3 targets = 300 VUs)
+        let target_count = target_raw.split(',').filter(|s| !s.trim().is_empty()).count() as u64;
         let processes = 1u64;
-        let vus_per_process = total_vus;
+        let vus_per_process = total_vus * target_count.max(1);
 
         let mut spawned: Vec<std::process::Child> = Vec::new();
         let mut first_pid = 0u32;

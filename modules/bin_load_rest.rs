@@ -73,17 +73,20 @@ pub async fn run(args: BenchArgs) {
             let book_table = "ReadBook";
             let author_table = "ReadAuthor";
             write_phase(&args, "seeding");
-            clear_tables(
-                &client,
-                args.primary_url(),
-                &auth_user,
-                &auth_pass,
-                "app-benchmarks",
-                &[book_table, author_table],
-            )
-            .await;
-            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
-            seed_books(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
+            // Seed on all targets so reads don't 404 on un-seeded nodes
+            for url in args.all_urls() {
+                clear_tables(
+                    &client,
+                    url,
+                    &auth_user,
+                    &auth_pass,
+                    "app-benchmarks",
+                    &[book_table, author_table],
+                )
+                .await;
+                seed_author(author_table, &client, url, &auth_user, &auth_pass).await;
+                seed_books(book_table, &client, url, &auth_user, &auth_pass, 1000).await;
+            }
             let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 10_000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
@@ -444,17 +447,19 @@ pub async fn run(args: BenchArgs) {
             let book_table = "JoinBook";
             let author_table = "JoinAuthor";
             write_phase(&args, "seeding");
-            clear_tables(
-                &client,
-                args.primary_url(),
-                &auth_user,
-                &auth_pass,
-                "app-benchmarks",
-                &[book_table, author_table],
-            )
-            .await;
-            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
-            seed_books(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
+            for url in args.all_urls() {
+                clear_tables(
+                    &client,
+                    url,
+                    &auth_user,
+                    &auth_pass,
+                    "app-benchmarks",
+                    &[book_table, author_table],
+                )
+                .await;
+                seed_author(author_table, &client, url, &auth_user, &auth_pass).await;
+                seed_books(book_table, &client, url, &auth_user, &auth_pass, 1000).await;
+            }
             let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 10_000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
