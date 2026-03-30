@@ -134,7 +134,7 @@ pub async fn run(args: BenchArgs) {
         args.warmup,
         args.vus,
         args.mode,
-        args.base_url
+        args.primary_url()
     );
 
     match args.test.as_str() {
@@ -144,7 +144,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} table...", message_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -161,7 +161,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -175,7 +175,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} table...", message_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -191,7 +191,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -205,7 +205,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} table...", message_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -222,7 +222,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -236,7 +236,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} table...", message_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -252,7 +252,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -316,7 +316,7 @@ async fn run_ws_test(
 
         for _vu in batch_start..batch_end {
             spawn_ws_subscriber(
-                &args.base_url,
+                args.primary_url(),
                 &connector,
                 &metrics,
                 &tracker,
@@ -359,7 +359,7 @@ async fn run_ws_test(
     // 4 concurrent publishers to saturate the server's write path.
     let num_publishers = 4;
     let mut pub_handles = Vec::new();
-    let pub_url = format!("{}/app-benchmarks/{}", args.base_url, message_table);
+    let pub_url = format!("{}/app-benchmarks/{}", args.primary_url(), message_table);
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -415,7 +415,7 @@ async fn run_ws_test(
                         let to_add = args.step_vus.min(total_vus - current_spawned);
                         for _ in 0..to_add {
                             spawn_ws_subscriber(
-                                &args.base_url, &connector, &metrics, &tracker, &stop, &mut handles,
+                                args.primary_url(), &connector, &metrics, &tracker, &stop, &mut handles,
                                 message_table,
                             );
                         }
@@ -497,7 +497,7 @@ async fn run_ws_test(
             .insert("snapshots".to_string(), serde_json::json!(snaps));
     }
 
-    let url = format!("{}/app-benchmarks/TestRun", args.base_url);
+    let url = format!("{}/app-benchmarks/TestRun", args.primary_url());
     match client
         .post(&url)
         .basic_auth(auth_user, Some(auth_pass))
@@ -675,7 +675,7 @@ async fn run_sse_test(
     // Publish as fast as possible to measure max fan-out throughput
     let num_publishers = 4;
     let mut pub_handles = Vec::new();
-    let pub_url = format!("{}/app-benchmarks/{}", args.base_url, message_table);
+    let pub_url = format!("{}/app-benchmarks/{}", args.primary_url(), message_table);
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -875,7 +875,7 @@ async fn run_ws_publish_test(
         for _vu in batch_start..batch_end {
             let ws_url = format!(
                 "{}/app-benchmarks/{}?stream=ws",
-                args.base_url
+                args.primary_url()
                     .replace("https://", "wss://")
                     .replace("http://", "ws://"),
                 message_table
@@ -1016,7 +1016,7 @@ async fn run_mqtt_test(
     let topic = format!("app-benchmarks/{}/#", message_table);
 
     // Parse host from base_url for MQTT connection
-    let mqtt_host = args.base_url
+    let mqtt_host = args.primary_url()
         .replace("https://", "")
         .replace("http://", "")
         .split(':')
@@ -1145,7 +1145,7 @@ async fn run_mqtt_test(
     // Publish via REST → MQTT bridge (table writes trigger MQTT notifications)
     let num_publishers = 4;
     let mut pub_handles = Vec::new();
-    let pub_url = format!("{}/app-benchmarks/{}", args.base_url, message_table);
+    let pub_url = format!("{}/app-benchmarks/{}", args.primary_url(), message_table);
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();

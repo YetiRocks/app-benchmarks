@@ -52,7 +52,7 @@ pub async fn run(args: BenchArgs) {
         args.duration,
         args.warmup,
         args.vus,
-        args.base_url
+        args.primary_url()
     );
 
     match args.test.as_str() {
@@ -62,7 +62,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} table...", article_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -133,7 +133,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -147,7 +147,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Seeding 50 {} records for vector search...", article_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -167,7 +167,7 @@ pub async fn run(args: BenchArgs) {
                         SAMPLE_TOPICS[topic_idx], id
                     ),
                 });
-                let url = format!("{}/app-benchmarks/{}/", args.base_url, article_table);
+                let url = format!("{}/app-benchmarks/{}/", args.primary_url(), article_table);
                 let _ = client
                     .post(&url)
                     .basic_auth(&auth_user, Some(&auth_pass))
@@ -242,7 +242,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",

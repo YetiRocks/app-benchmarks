@@ -65,7 +65,7 @@ pub async fn run(args: BenchArgs) {
         args.warmup,
         args.vus,
         args.mode,
-        args.base_url
+        args.primary_url()
     );
 
     match args.test.as_str() {
@@ -75,16 +75,16 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "seeding");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
-            seed_books(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
-            let ids = fetch_book_ids(book_table, &client, &args.base_url, &auth_user, &auth_pass, 10_000).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
+            seed_books(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
+            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 10_000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
@@ -166,7 +166,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -181,14 +181,14 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} + {} tables...", book_table, author_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
             write_phase(&args, "warming");
             let book_table_owned = book_table.to_string();
             let scenario = move |ctx: Arc<runner::ScenarioContext>| {
@@ -256,7 +256,7 @@ pub async fn run(args: BenchArgs) {
             let extra = verify_write_results(
                 book_table,
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 successful_writes,
@@ -277,7 +277,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -288,7 +288,7 @@ pub async fn run(args: BenchArgs) {
         "rest-batch-write" => {
             let book_table = "BatchWriteBook";
             write_phase(&args, "seeding");
-            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
 
             write_phase(&args, "warming");
             let batch_size = 100usize;
@@ -334,7 +334,7 @@ pub async fn run(args: BenchArgs) {
             reporter::report_results_with_snapshots(&rctx, "rest-batch-write", elapsed, &summary, &snapshots, args.vus).await;
 
             write_phase(&args, "cleaning");
-            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
         },
         "rest-update" => {
             let book_table = "UpdateBook";
@@ -343,14 +343,14 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} + {} tables...", book_table, author_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
             let record_count = args.vus * 100;
             let record_ids: Vec<String> = (0..record_count)
                 .map(|_| Uuid::new_v4().to_string())
@@ -365,7 +365,7 @@ pub async fn run(args: BenchArgs) {
                     "price": 10.0,
                     "authorId": "bench-author-1",
                 });
-                let url = format!("{}/app-benchmarks/{}/", args.base_url, book_table);
+                let url = format!("{}/app-benchmarks/{}/", args.primary_url(), book_table);
                 let _ = client
                     .post(&url)
                     .basic_auth(&auth_user, Some(&auth_pass))
@@ -432,7 +432,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -446,16 +446,16 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "seeding");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
-            seed_books(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
-            let ids = fetch_book_ids(book_table, &client, &args.base_url, &auth_user, &auth_pass, 10_000).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
+            seed_books(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
+            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 10_000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
@@ -519,7 +519,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",

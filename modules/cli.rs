@@ -71,6 +71,11 @@ impl BenchArgs {
         }
     }
 
+    /// First URL from comma-separated list (for seeding/cleanup)
+    pub fn primary_url(&self) -> &str {
+        self.base_url.split(',').next().unwrap_or(&self.base_url).trim()
+    }
+
     pub fn is_ramp(&self) -> bool {
         self.mode == "ramp"
     }

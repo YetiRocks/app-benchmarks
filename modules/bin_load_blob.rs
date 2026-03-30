@@ -24,7 +24,7 @@ pub async fn run(args: BenchArgs) {
         args.duration,
         args.warmup,
         args.vus,
-        args.base_url
+        args.primary_url()
     );
 
     match args.test.as_str() {
@@ -33,7 +33,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing BlobData table...");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -53,7 +53,7 @@ pub async fn run(args: BenchArgs) {
                 "category": "benchmark",
                 "content": large_content,
             });
-            let url = format!("{}/app-benchmarks/BlobData/", args.base_url);
+            let url = format!("{}/app-benchmarks/BlobData/", args.primary_url());
             match client
                 .post(&url)
                 .basic_auth(&auth_user, Some(&auth_pass))
@@ -127,7 +127,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",

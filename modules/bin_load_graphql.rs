@@ -68,7 +68,7 @@ pub async fn run(args: BenchArgs) {
         args.warmup,
         args.vus,
         args.mode,
-        args.base_url
+        args.primary_url()
     );
 
     match args.test.as_str() {
@@ -78,16 +78,16 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "seeding");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
-            seed_books_graphql(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
-            let ids = fetch_book_ids(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
+            seed_books_graphql(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
+            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
@@ -170,7 +170,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -185,7 +185,7 @@ pub async fn run(args: BenchArgs) {
             tracing::info!("Clearing {} + {} tables...", book_table, author_table);
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -251,7 +251,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
@@ -262,7 +262,7 @@ pub async fn run(args: BenchArgs) {
         "graphql-batch-write" => {
             let book_table = "GqlBatchWriteBook";
             write_phase(&args, "seeding");
-            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
 
             write_phase(&args, "warming");
             let batch_size = 100usize;
@@ -302,12 +302,12 @@ pub async fn run(args: BenchArgs) {
             reporter::report_results_with_snapshots(&rctx, "graphql-batch-write", elapsed, &summary, &snapshots, args.vus).await;
 
             write_phase(&args, "cleaning");
-            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
         },
         "graphql-update" => {
             let book_table = "GqlUpdateBook";
             write_phase(&args, "seeding");
-            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
 
             // Seed records to update
             let record_count = 1000;
@@ -319,7 +319,7 @@ pub async fn run(args: BenchArgs) {
                     r#"mutation {{ {}(input: {{ id: "{}", title: "Update Bench {}", price: 10.0, authorId: "bench-author-1" }}) {{ id }} }}"#,
                     create_fn, id, &id[..8]
                 );
-                let _ = client.post(format!("{}/app-benchmarks/graphql", args.base_url))
+                let _ = client.post(format!("{}/app-benchmarks/graphql", args.primary_url()))
                     .basic_auth(&auth_user, Some(&auth_pass))
                     .json(&serde_json::json!({ "query": mutation }))
                     .send().await;
@@ -362,7 +362,7 @@ pub async fn run(args: BenchArgs) {
             ).await;
 
             write_phase(&args, "cleaning");
-            clear_tables(&client, &args.base_url, &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
         },
         "graphql-join" => {
             let book_table = "GqlJoinBook";
@@ -370,16 +370,16 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "seeding");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, &args.base_url, &auth_user, &auth_pass).await;
-            seed_books_graphql(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
-            let ids = fetch_book_ids(book_table, &client, &args.base_url, &auth_user, &auth_pass, 1000).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
+            seed_books_graphql(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
+            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 1000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
@@ -446,7 +446,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
-                &args.base_url,
+                args.primary_url(),
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
