@@ -316,12 +316,12 @@ resource!(BenchmarkRunner {
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
 
-        // Support comma-delimited target URLs: processes are distributed round-robin
+        // Support comma-delimited target URLs: each target gets full VU count
         let targets: Vec<&str> = target_raw.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
 
-        // Ensure at least as many processes as targets so each target gets load
-        let processes = processes.max(targets.len() as u64);
-        let vus_per_process = total_vus / processes;
+        // One process per target, each with the full VU count
+        let processes = targets.len() as u64;
+        let vus_per_process = total_vus;
 
         let mut spawned: Vec<std::process::Child> = Vec::new();
         let mut first_pid = 0u32;
