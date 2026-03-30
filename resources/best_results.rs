@@ -39,7 +39,8 @@ resource!(BestResults {
             Err(_) => Vec::new(),
         };
 
-        let mut best_by_test: HashMap<String, Value> = HashMap::new();
+        // Group runs by (testName, runGroup) and aggregate parallel processes
+        let mut groups: HashMap<(String, String), Vec<Value>> = HashMap::new();
         for run in &runs {
             let test_name = match run.get("testName").and_then(|v| v.as_str()) {
                 Some(name) => name.to_string(),
@@ -47,20 +48,54 @@ resource!(BestResults {
             };
             let results_str = run.get("results").and_then(|v| v.as_str()).unwrap_or("{}");
             let results: Value = serde_json::from_str(results_str).unwrap_or(json!({}));
-            let throughput = results.get("throughput").and_then(|v| v.as_f64()).unwrap_or(0.0);
-
-            // Skip runs with no results or >1% error rate
             let total = results.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
             if total == 0 { continue; }
             let errors = results.get("errors").and_then(|v| v.as_u64()).unwrap_or(0);
             if (errors as f64 / total as f64) > 0.01 { continue; }
 
-            let is_better = match best_by_test.get(&test_name) {
-                Some(existing) => throughput > existing.get("throughput").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            let group = run.get("runGroup").and_then(|v| v.as_str())
+                .unwrap_or("solo").to_string();
+            groups.entry((test_name, group)).or_default().push(results);
+        }
+
+        // Aggregate each group: sum throughput/total/errors, weighted-avg latencies
+        let mut best_by_test: HashMap<String, Value> = HashMap::new();
+        for ((test_name, _group), results_vec) in &groups {
+            let mut agg_throughput = 0.0;
+            let mut agg_total = 0u64;
+            let mut agg_errors = 0u64;
+            let mut weighted_p50 = 0.0;
+            let mut weighted_p95 = 0.0;
+            let mut weighted_p99 = 0.0;
+
+            for r in results_vec {
+                let t = r.get("throughput").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let n = r.get("total").and_then(|v| v.as_u64()).unwrap_or(0) as f64;
+                agg_throughput += t;
+                agg_total += r.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
+                agg_errors += r.get("errors").and_then(|v| v.as_u64()).unwrap_or(0);
+                weighted_p50 += r.get("p50").and_then(|v| v.as_f64()).unwrap_or(0.0) * n;
+                weighted_p95 += r.get("p95").and_then(|v| v.as_f64()).unwrap_or(0.0) * n;
+                weighted_p99 += r.get("p99").and_then(|v| v.as_f64()).unwrap_or(0.0) * n;
+            }
+
+            let total_f = agg_total as f64;
+            let aggregated = json!({
+                "throughput": (agg_throughput * 10.0).round() / 10.0,
+                "p50": if total_f > 0.0 { (weighted_p50 / total_f * 100.0).round() / 100.0 } else { 0.0 },
+                "p95": if total_f > 0.0 { (weighted_p95 / total_f * 100.0).round() / 100.0 } else { 0.0 },
+                "p99": if total_f > 0.0 { (weighted_p99 / total_f * 100.0).round() / 100.0 } else { 0.0 },
+                "total": agg_total,
+                "errors": agg_errors,
+                "nodes": results_vec.len(),
+            });
+
+            let is_better = match best_by_test.get(test_name) {
+                Some(existing) => agg_throughput > existing.get("throughput").and_then(|v| v.as_f64()).unwrap_or(0.0),
                 None => true,
             };
             if is_better {
-                best_by_test.insert(test_name, results);
+                best_by_test.insert(test_name.clone(), aggregated);
             }
         }
 

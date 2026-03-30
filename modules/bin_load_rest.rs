@@ -160,6 +160,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
                 &rctx, &args.test, elapsed, &summary, &snapshots, args.vus,
@@ -271,6 +272,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                run_group: args.run_group.as_deref(),
             };
             reporter::report_results_full(
                 &rctx, &args.test, elapsed, &summary, extra, &snapshots, args.vus,
@@ -333,7 +335,7 @@ pub async fn run(args: BenchArgs) {
 
             let summary = metrics.summary(elapsed);
             validate_error_rate(&summary);
-            let rctx = ReportContext { client: &client, base_url: &args.report_url, auth_user: &auth_user, auth_pass: &auth_pass };
+            let rctx = ReportContext { client: &client, base_url: &args.report_url, auth_user: &auth_user, auth_pass: &auth_pass, run_group: args.run_group.as_deref() };
             reporter::report_results_with_snapshots(&rctx, "rest-batch-write", elapsed, &summary, &snapshots, args.vus).await;
 
             write_phase(&args, "cleaning");
@@ -421,6 +423,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
                 &rctx,
@@ -510,6 +513,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
                 &rctx,

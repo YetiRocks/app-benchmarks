@@ -124,6 +124,7 @@ pub struct ReportContext<'a> {
     pub base_url: &'a str,
     pub auth_user: &'a str,
     pub auth_pass: &'a str,
+    pub run_group: Option<&'a str>,
 }
 
 /// Post-write verification: fetches table metadata, compares record count to expected,

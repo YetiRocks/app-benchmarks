@@ -119,6 +119,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
                 &rctx,
@@ -228,6 +229,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
                 &rctx,

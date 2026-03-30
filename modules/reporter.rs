@@ -127,10 +127,13 @@ pub async fn report_results_full(
     });
 
     if let Some(snaps) = snapshots_str {
-        payload
-            .as_object_mut()
-            .unwrap()
+        payload.as_object_mut().unwrap()
             .insert("snapshots".to_string(), serde_json::json!(snaps));
+    }
+
+    if let Some(group) = ctx.run_group {
+        payload.as_object_mut().unwrap()
+            .insert("runGroup".to_string(), serde_json::json!(group));
     }
 
     let url = format!("{}/app-benchmarks/TestRun", base_url);

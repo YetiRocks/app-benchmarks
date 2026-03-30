@@ -51,6 +51,14 @@ pub struct BenchArgs {
     #[arg(long, default_value = "https://localhost")]
     pub report_url: String,
 
+    /// Run group ID for aggregating results from parallel processes
+    #[arg(long)]
+    pub run_group: Option<String>,
+
+    /// Skip seeding (data already seeded by another process)
+    #[arg(long, default_value = "false")]
+    pub skip_seed: bool,
+
     /// Path to a file where the binary writes its current phase (seeding/warming/running/cleaning)
     #[arg(long)]
     pub status_file: Option<String>,

@@ -316,24 +316,33 @@ resource!(BenchmarkRunner {
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
 
-        // Single process, VUs scale with target count (100 VUs × 3 targets = 300 VUs)
-        let target_count = target_raw.split(',').filter(|s| !s.trim().is_empty()).count() as u64;
-        let processes = 1u64;
-        let vus_per_process = total_vus * target_count.max(1);
+        // One process per target, each with full VUs. Results aggregated by runGroup.
+        let targets: Vec<&str> = target_raw.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let run_group = format!("{}-{}", test_id, unix_timestamp().unwrap_or(0));
+
+        // First: seed on all targets (single process, blocking)
+        // The first target seeds normally; subsequent targets get seeded too
+        // by running the binary with --base-url pointing to each target in sequence.
+        // The actual load processes will use --skip-seed.
 
         let mut spawned: Vec<std::process::Child> = Vec::new();
         let mut first_pid = 0u32;
 
-        for i in 0..processes {
+        for (i, target) in targets.iter().enumerate() {
             let mut cmd = std::process::Command::new(&binary_path);
             cmd.arg("--test").arg(&test_id)
-                .arg("--base-url").arg(&target_raw)
+                .arg("--base-url").arg(target)
                 .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
-                .arg("--vus").arg(vus_per_process.to_string())
-                .arg("--warmup").arg("5");
+                .arg("--vus").arg(total_vus.to_string())
+                .arg("--warmup").arg("5")
+                .arg("--run-group").arg(&run_group);
 
-            // Only the first process writes the status file and reports results
+            // Only skip seed on processes after the first
+            // (first process seeds on its own target; others skip since they'll seed too)
+            // Actually: don't skip — each process seeds on its own target
+
+            // Only the first process writes the status file (drives phase transitions)
             if i == 0 {
                 cmd.arg("--status-file").arg(&status_file);
             }

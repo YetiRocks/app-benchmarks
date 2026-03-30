@@ -772,6 +772,7 @@ async fn run_sse_test(
         base_url: &args.report_url,
         auth_user,
         auth_pass,
+        run_group: args.run_group.as_deref(),
     };
     reporter::report_results_full(
         &rctx,
@@ -980,6 +981,7 @@ async fn run_ws_publish_test(
         base_url: &args.report_url,
         auth_user,
         auth_pass,
+        run_group: args.run_group.as_deref(),
     };
     reporter::report_results_full(
         &rctx,
@@ -1204,6 +1206,7 @@ async fn run_mqtt_test(
         base_url: &args.report_url,
         auth_user,
         auth_pass,
+        run_group: args.run_group.as_deref(),
     };
     reporter::report_results_full(
         &rctx,
