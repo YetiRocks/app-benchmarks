@@ -4,18 +4,20 @@ version: "0.1.0"
 customer_id: "yeti"
 required_roles: [yeti_admin]
 
-static_files:
+static:
   path: web
+  route: /
   spa: true
   build:
-    sourceDir: source
+    source: source
     command: npm run build
 
 schemas:
-  - schema.graphql
+  path: schema.graphql
 
 resources:
-  - "resources/*.rs"
+  path: "resources/*.rs"
+  route: /api
 
 binaries:
   - "bin/*.rs"

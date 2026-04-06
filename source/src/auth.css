@@ -6,7 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  height: calc(100vh - 73px);
+  margin-top: 73px;
   background: var(--color-black);
 }
 

@@ -1,4 +1,4 @@
-const BASE = '/app-benchmarks';
+const BASE = RESOURCE_ROUTE;
 
 export async function api(path: string, options?: RequestInit): Promise<Response> {
   const url = `${BASE}${path}`;
