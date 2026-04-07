@@ -49,7 +49,7 @@ Restart yeti. The application compiles automatically on first load (~6 minutes f
 ### 2. Open the dashboard
 
 ```bash
-open https://localhost:9996/app-benchmarks
+open https://localhost/app-benchmarks
 ```
 
 The React dashboard shows all 17 test cards organized by category, with best results and run history.
@@ -57,7 +57,7 @@ The React dashboard shows all 17 test cards organized by category, with best res
 ### 3. Start a benchmark
 
 ```bash
-curl -X POST https://localhost:9996/app-benchmarks/runner \
+curl -X POST https://localhost/app-benchmarks/api/runner \
   -H "Content-Type: application/json" \
   -d '{ "test": "rest-read" }'
 ```
@@ -79,7 +79,7 @@ The runner spawns the `load-rest` binary, which seeds test data, warms up for 5 
 ### 4. Check runner status
 
 ```bash
-curl https://localhost:9996/app-benchmarks/runner
+curl https://localhost/app-benchmarks/api/runner
 ```
 
 Response (while running):
@@ -98,7 +98,7 @@ Response (while running):
 ### 5. View best results
 
 ```bash
-curl https://localhost:9996/app-benchmarks/bestresults
+curl https://localhost/app-benchmarks/api/bestresults
 ```
 
 Response:
@@ -136,7 +136,7 @@ Tests with no results are included (with no `best` field) so the dashboard can r
 ### 6. View run history
 
 ```bash
-curl https://localhost:9996/app-benchmarks/history/rest-read
+curl https://localhost/app-benchmarks/api/history/rest-read
 ```
 
 Response:
@@ -161,23 +161,23 @@ Response:
 
 ```bash
 # Custom VU count
-curl -X POST https://localhost:9996/app-benchmarks/runner \
+curl -X POST https://localhost/app-benchmarks/api/runner \
   -H "Content-Type: application/json" \
   -d '{ "test": "ws", "vus": 30000 }'
 
 # Multi-target cluster benchmark
-curl -X POST https://localhost:9996/app-benchmarks/runner \
+curl -X POST https://localhost/app-benchmarks/api/runner \
   -H "Content-Type: application/json" \
   -d '{
     "test": "rest-read",
-    "targetUrl": "https://node1:9996,https://node2:9996,https://node3:9996"
+    "targetUrl": "https://node1,https://node2,https://node3"
   }'
 ```
 
 ### 8. Clear all results
 
 ```bash
-curl -X DELETE https://localhost:9996/app-benchmarks/bestresults
+curl -X DELETE https://localhost/app-benchmarks/api/bestresults
 ```
 
 Response:
@@ -238,7 +238,7 @@ Dashboard (React SPA)                  Load Generator Binaries
 
 ## Features
 
-### Benchmark Runner (POST /app-benchmarks/runner)
+### Benchmark Runner (POST /app-benchmarks/api/runner)
 
 Orchestrates benchmark execution by spawning native load test binaries as child processes:
 
@@ -263,7 +263,7 @@ Orchestrates benchmark execution by spawning native load test binaries as child 
 
 **Telemetry suppression:** While any benchmark is active, responses include `x-yeti-suppress-telemetry: true` to prevent tracing overhead from affecting results. The dynamic router intercepts this header and pauses telemetry collection.
 
-### Runner Status (GET /app-benchmarks/runner)
+### Runner Status (GET /app-benchmarks/api/runner)
 
 Returns current runner state with timing information:
 
@@ -277,7 +277,7 @@ Returns current runner state with timing information:
 | `configuredDuration` | Integer | Total measurement duration in seconds |
 | `lastError` | String | Error message from last failed run, or null |
 
-### Best Results (GET /app-benchmarks/bestresults)
+### Best Results (GET /app-benchmarks/api/bestresults)
 
 Aggregates the best run for each test based on highest throughput, filtering out runs with greater than 1% error rate:
 
@@ -288,11 +288,11 @@ Aggregates the best run for each test based on highest throughput, filtering out
 
 **Best-result selection:** For each test, scans all TestRun records, parses the JSON `results` field, and selects the run with the highest `throughput` value that has an error rate below 1%.
 
-### Clear Results (DELETE /app-benchmarks/bestresults)
+### Clear Results (DELETE /app-benchmarks/api/bestresults)
 
 Deletes all TestRun records from the database. Returns the count of deleted records.
 
-### Run History (GET /app-benchmarks/history/{testName})
+### Run History (GET /app-benchmarks/api/history/{testName})
 
 Returns all historical runs for a specific test, sorted by timestamp descending:
 
@@ -436,18 +436,20 @@ version: "0.1.0"
 customer_id: "yeti"
 required_roles: [yeti_admin]
 
-static_files:
+static:
   path: web
+  route: /
   spa: true
   build:
-    sourceDir: source
+    source: source
     command: npm run build
 
 schemas:
-  - schema.graphql
+  path: schema.graphql
 
 resources:
-  - "resources/*.rs"
+  path: "resources/*.rs"
+  route: /api
 
 binaries:
   - "bin/*.rs"
@@ -539,14 +541,14 @@ app-benchmarks/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/app-benchmarks/runner` | Current runner state and timing |
-| `POST` | `/app-benchmarks/runner` | Start a benchmark test |
-| `GET` | `/app-benchmarks/bestresults` | Best results for all tests |
-| `DELETE` | `/app-benchmarks/bestresults` | Delete all TestRun records |
-| `GET` | `/app-benchmarks/history/{testName}` | Run history for a specific test |
-| `GET` | `/app-benchmarks/TestRun?limit=N` | List TestRun records (auto-generated) |
-| `GET` | `/app-benchmarks/TestRun/{id}` | Get a specific TestRun (auto-generated) |
-| `GET` | `/app-benchmarks/{Table}?stream=sse` | SSE stream for realtime tables |
+| `GET` | `/app-benchmarks/api/runner` | Current runner state and timing |
+| `POST` | `/app-benchmarks/api/runner` | Start a benchmark test |
+| `GET` | `/app-benchmarks/api/bestresults` | Best results for all tests |
+| `DELETE` | `/app-benchmarks/api/bestresults` | Delete all TestRun records |
+| `GET` | `/app-benchmarks/api/history/{testName}` | Run history for a specific test |
+| `GET` | `/app-benchmarks/api/TestRun?limit=N` | List TestRun records (auto-generated) |
+| `GET` | `/app-benchmarks/api/TestRun/{id}` | Get a specific TestRun (auto-generated) |
+| `GET` | `/app-benchmarks/api/{Table}?stream=sse` | SSE stream for realtime tables |
 
 ---
 
