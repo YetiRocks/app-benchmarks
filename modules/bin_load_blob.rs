@@ -37,6 +37,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &["BlobData"],
             )
             .await;
@@ -53,9 +54,9 @@ pub async fn run(args: BenchArgs) {
                 "category": "benchmark",
                 "content": large_content,
             });
-            let url = format!("{}/app-benchmarks/BlobData/", args.primary_url());
+            let url = args.table_url(args.primary_url(), "BlobData");
             match client
-                .post(&url)
+                .post(format!("{}/", url))
                 .basic_auth(&auth_user, Some(&auth_pass))
                 .json(&body)
                 .send()
@@ -79,6 +80,7 @@ pub async fn run(args: BenchArgs) {
 
             write_phase(&args, "warming");
             let blob_id = Arc::new(blob_id);
+            let route = args.route.clone();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -91,8 +93,13 @@ pub async fn run(args: BenchArgs) {
                 },
                 move |ctx| {
                     let blob_id = blob_id.clone();
+                    let route = route.clone();
                     async move {
-                        let url = format!("{}/app-benchmarks/BlobData/{}", ctx.base_url, blob_id);
+                        let url = if route.is_empty() {
+                            format!("{}/app-benchmarks/BlobData/{}", ctx.base_url, blob_id)
+                        } else {
+                            format!("{}/app-benchmarks/{}/BlobData/{}", ctx.base_url, route, blob_id)
+                        };
                         let start = std::time::Instant::now();
                         let result = ctx
                             .client
@@ -113,6 +120,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
@@ -132,6 +140,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &["BlobData"],
             )
             .await;

@@ -66,12 +66,14 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[article_table],
             )
             .await;
 
             write_phase(&args, "warming");
             let article_table_owned = article_table.to_string();
+            let route = args.route.clone();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -84,6 +86,7 @@ pub async fn run(args: BenchArgs) {
                 },
                 move |ctx| {
                     let article_table = article_table_owned.clone();
+                    let route = route.clone();
                     async move {
                         let id = Uuid::new_v4().to_string();
                         let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
@@ -97,7 +100,11 @@ pub async fn run(args: BenchArgs) {
                                 SAMPLE_TOPICS[topic_idx], id
                             ),
                         });
-                        let url = format!("{}/app-benchmarks/{}/", ctx.base_url, article_table);
+                        let url = if route.is_empty() {
+                            format!("{}/app-benchmarks/{}/", ctx.base_url, article_table)
+                        } else {
+                            format!("{}/app-benchmarks/{}/{}/", ctx.base_url, route, article_table)
+                        };
                         let start = std::time::Instant::now();
                         let result = ctx
                             .client
@@ -119,6 +126,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
@@ -138,6 +146,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[article_table],
             )
             .await;
@@ -152,6 +161,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[article_table],
             )
             .await;
@@ -168,9 +178,9 @@ pub async fn run(args: BenchArgs) {
                         SAMPLE_TOPICS[topic_idx], id
                     ),
                 });
-                let url = format!("{}/app-benchmarks/{}/", args.primary_url(), article_table);
+                let url = args.table_url(args.primary_url(), article_table);
                 let _ = client
-                    .post(&url)
+                    .post(format!("{}/", url))
                     .basic_auth(&auth_user, Some(&auth_pass))
                     .json(&body)
                     .send()
@@ -181,6 +191,7 @@ pub async fn run(args: BenchArgs) {
 
             write_phase(&args, "warming");
             let article_table_owned = article_table.to_string();
+            let route = args.route.clone();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -193,6 +204,7 @@ pub async fn run(args: BenchArgs) {
                 },
                 move |ctx| {
                     let article_table = article_table_owned.clone();
+                    let route = route.clone();
                     async move {
                         let topic_idx = ctx.next_request_idx() as usize % SAMPLE_TOPICS.len();
                         let query = serde_json::json!({
@@ -203,12 +215,22 @@ pub async fn run(args: BenchArgs) {
                             }],
                             "limit": 10
                         });
-                        let url = format!(
-                            "{}/app-benchmarks/{}/?query={}",
-                            ctx.base_url,
-                            article_table,
-                            urlencoding(query.to_string())
-                        );
+                        let url = if route.is_empty() {
+                            format!(
+                                "{}/app-benchmarks/{}/?query={}",
+                                ctx.base_url,
+                                article_table,
+                                urlencoding(query.to_string())
+                            )
+                        } else {
+                            format!(
+                                "{}/app-benchmarks/{}/{}/?query={}",
+                                ctx.base_url,
+                                route,
+                                article_table,
+                                urlencoding(query.to_string())
+                            )
+                        };
                         let start = std::time::Instant::now();
                         let result = ctx
                             .client
@@ -229,6 +251,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
@@ -248,6 +271,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[article_table],
             )
             .await;

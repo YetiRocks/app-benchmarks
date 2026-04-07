@@ -1,0 +1,11 @@
+[
+  {
+    "id": "app-benchmarks:yeti_admin",
+    "appId": "app-benchmarks",
+    "name": "Yeti Admin",
+    "permission": {
+      "super_user": true,
+      "databases": {}
+    }
+  }
+]

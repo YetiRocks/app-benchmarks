@@ -25,7 +25,12 @@ binaries:
 modules:
   - "modules/*.rs"
 
+authLoader:
+  roles: auth/roles.json
+
 auth:
+  signup: auto
+  default_role: yeti_admin
   methods: [oauth]
   oauth:
     google:

@@ -16,6 +16,10 @@ type ReadBook @table(database: "app-benchmarks") @export(mqtt: false, public: [r
     price: Float
     authorId: ID!
 }
+type ReadAuthor @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    name: String!
+}
 
 # ── REST Write tables ──
 type WriteBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
@@ -24,6 +28,10 @@ type WriteBook @table(database: "app-benchmarks") @export(mqtt: false, public: [
     price: Float
     authorId: ID!
 }
+type WriteAuthor @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    name: String!
+}
 
 # ── REST Update tables ──
 type UpdateBook @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
@@ -31,6 +39,10 @@ type UpdateBook @table(database: "app-benchmarks") @export(mqtt: false, public: 
     title: String!
     price: Float
     authorId: ID!
+}
+type UpdateAuthor @table(database: "app-benchmarks") @export(mqtt: false, public: [read, create, update, delete]) {
+    id: ID!
+    name: String!
 }
 
 # ── REST Join tables ──

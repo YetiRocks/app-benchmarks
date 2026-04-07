@@ -10,13 +10,18 @@ use std::time::Duration;
 use uuid::Uuid;
 
 /// Ensure a benchmark Author record exists for join tests.
-async fn seed_author(table: &str, client: &reqwest::Client, base_url: &str, auth_user: &str, auth_pass: &str) {
+async fn seed_author(table: &str, client: &reqwest::Client, base_url: &str, auth_user: &str, auth_pass: &str, route: &str) {
     let body = serde_json::json!({
         "id": "bench-author-1",
         "name": "Benchmark Author",
     });
+    let url = if route.is_empty() {
+        format!("{}/app-benchmarks/{}/", base_url, table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}/", base_url, route, table)
+    };
     let _ = client
-        .post(format!("{}/app-benchmarks/{}/", base_url, table))
+        .post(url)
         .basic_auth(auth_user, Some(auth_pass))
         .json(&body)
         .send()
@@ -29,6 +34,7 @@ async fn seed_books(book_table: &str,
     base_url: &str,
     auth_user: &str,
     auth_pass: &str,
+    route: &str,
     count: usize,
 ) {
     for i in 0..count {
@@ -39,8 +45,13 @@ async fn seed_books(book_table: &str,
             "price": 9.99,
             "authorId": "bench-author-1",
         });
+        let url = if route.is_empty() {
+            format!("{}/app-benchmarks/{}/", base_url, book_table)
+        } else {
+            format!("{}/app-benchmarks/{}/{}/", base_url, route, book_table)
+        };
         let _ = client
-            .post(format!("{}/app-benchmarks/{}/", base_url, book_table))
+            .post(url)
             .basic_auth(auth_user, Some(auth_pass))
             .json(&body)
             .send()
@@ -81,13 +92,14 @@ pub async fn run(args: BenchArgs) {
                     &auth_user,
                     &auth_pass,
                     "app-benchmarks",
+                    &args.route,
                     &[book_table, author_table],
                 )
                 .await;
-                seed_author(author_table, &client, url, &auth_user, &auth_pass).await;
-                seed_books(book_table, &client, url, &auth_user, &auth_pass, 1000).await;
+                seed_author(author_table, &client, url, &auth_user, &auth_pass, &args.route).await;
+                seed_books(book_table, &client, url, &auth_user, &auth_pass, &args.route, 1000).await;
             }
-            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 10_000).await;
+            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, &args.route, 10_000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
@@ -96,16 +108,25 @@ pub async fn run(args: BenchArgs) {
             let ids = Arc::new(ids);
 
             let book_table_owned = book_table.to_string();
+            let route = args.route.clone();
             let scenario = move |ctx: Arc<runner::ScenarioContext>| {
                 let ids = ids.clone();
                 let book_table = book_table_owned.clone();
+                let route = route.clone();
                 async move {
                     let idx = ctx.next_request_idx() as usize % ids.len();
                     let id = &ids[idx];
-                    let url = format!(
-                        "{}/app-benchmarks/{}/{}?select=id,title",
-                        ctx.base_url, book_table, id
-                    );
+                    let url = if route.is_empty() {
+                        format!(
+                            "{}/app-benchmarks/{}/{}?select=id,title",
+                            ctx.base_url, book_table, id
+                        )
+                    } else {
+                        format!(
+                            "{}/app-benchmarks/{}/{}/{}?select=id,title",
+                            ctx.base_url, route, book_table, id
+                        )
+                    };
                     let start = std::time::Instant::now();
                     let result = ctx
                         .client
@@ -160,6 +181,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
@@ -174,6 +196,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[book_table, author_table],
             )
             .await;
@@ -189,14 +212,17 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass, &args.route).await;
             write_phase(&args, "warming");
             let book_table_owned = book_table.to_string();
+            let route = args.route.clone();
             let scenario = move |ctx: Arc<runner::ScenarioContext>| {
                 let book_table = book_table_owned.clone();
+                let route = route.clone();
                 async move {
                     let id = Uuid::new_v4().to_string();
                     let body = serde_json::json!({
@@ -205,7 +231,11 @@ pub async fn run(args: BenchArgs) {
                         "price": 9.99,
                         "authorId": "bench-author-1",
                     });
-                    let url = format!("{}/app-benchmarks/{}/", ctx.base_url, book_table);
+                    let url = if route.is_empty() {
+                        format!("{}/app-benchmarks/{}/", ctx.base_url, book_table)
+                    } else {
+                        format!("{}/app-benchmarks/{}/{}/", ctx.base_url, route, book_table)
+                    };
                     let start = std::time::Instant::now();
                     let result = ctx
                         .client
@@ -263,6 +293,7 @@ pub async fn run(args: BenchArgs) {
                 args.primary_url(),
                 &auth_user,
                 &auth_pass,
+                &args.route,
                 successful_writes,
             )
             .await;
@@ -272,6 +303,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_full(
@@ -286,6 +318,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[book_table, author_table],
             )
             .await;
@@ -293,13 +326,15 @@ pub async fn run(args: BenchArgs) {
         "rest-batch-write" => {
             let book_table = "BatchWriteBook";
             write_phase(&args, "seeding");
-            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &args.route, &[book_table]).await;
 
             write_phase(&args, "warming");
             let batch_size = 100usize;
             let book_table_owned = book_table.to_string();
+            let route = args.route.clone();
             let scenario = move |ctx: Arc<runner::ScenarioContext>| {
                 let book_table = book_table_owned.clone();
+                let route = route.clone();
                 async move {
                     // Build a batch of 100 records as a JSON array
                     let records: Vec<serde_json::Value> = (0..batch_size)
@@ -314,7 +349,11 @@ pub async fn run(args: BenchArgs) {
                         })
                         .collect();
                     let body = serde_json::Value::Array(records);
-                    let url = format!("{}/app-benchmarks/{}/", ctx.base_url, book_table);
+                    let url = if route.is_empty() {
+                        format!("{}/app-benchmarks/{}/", ctx.base_url, book_table)
+                    } else {
+                        format!("{}/app-benchmarks/{}/{}/", ctx.base_url, route, book_table)
+                    };
                     let start = std::time::Instant::now();
                     let result = ctx
                         .client
@@ -335,11 +374,11 @@ pub async fn run(args: BenchArgs) {
 
             let summary = metrics.summary(elapsed);
             validate_error_rate(&summary);
-            let rctx = ReportContext { client: &client, base_url: &args.report_url, auth_user: &auth_user, auth_pass: &auth_pass, run_group: args.run_group.as_deref() };
+            let rctx = ReportContext { client: &client, base_url: &args.report_url, auth_user: &auth_user, auth_pass: &auth_pass, route: &args.route, run_group: args.run_group.as_deref() };
             reporter::report_results_with_snapshots(&rctx, "rest-batch-write", elapsed, &summary, &snapshots, args.vus).await;
 
             write_phase(&args, "cleaning");
-            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &[book_table]).await;
+            clear_tables(&client, args.primary_url(), &auth_user, &auth_pass, "app-benchmarks", &args.route, &[book_table]).await;
         },
         "rest-update" => {
             let book_table = "UpdateBook";
@@ -352,10 +391,11 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[book_table, author_table],
             )
             .await;
-            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass).await;
+            seed_author(author_table, &client, args.primary_url(), &auth_user, &auth_pass, &args.route).await;
             let record_count = args.vus * 100;
             let record_ids: Vec<String> = (0..record_count)
                 .map(|_| Uuid::new_v4().to_string())
@@ -366,13 +406,13 @@ pub async fn run(args: BenchArgs) {
                 let body = serde_json::json!({
                     "id": id,
                     "title": format!("Update Bench {}", &id[..8]),
-                    
+
                     "price": 10.0,
                     "authorId": "bench-author-1",
                 });
-                let url = format!("{}/app-benchmarks/{}/", args.primary_url(), book_table);
+                let url = args.table_url(args.primary_url(), book_table);
                 let _ = client
-                    .post(&url)
+                    .post(format!("{}/", url))
                     .basic_auth(&auth_user, Some(&auth_pass))
                     .json(&body)
                     .send()
@@ -383,6 +423,7 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "warming");
             let ids = Arc::new(record_ids);
             let book_table_owned = book_table.to_string();
+            let route = args.route.clone();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -396,12 +437,17 @@ pub async fn run(args: BenchArgs) {
                 move |ctx| {
                     let ids = ids.clone();
                     let book_table = book_table_owned.clone();
+                    let route = route.clone();
                     async move {
                         let idx = ctx.next_request_idx() as usize % ids.len();
                         let id = &ids[idx];
                         let price: f64 = rand::random::<f64>() * 100.0;
                         let body = serde_json::json!({ "price": price });
-                        let url = format!("{}/app-benchmarks/{}/{}", ctx.base_url, book_table, id);
+                        let url = if route.is_empty() {
+                            format!("{}/app-benchmarks/{}/{}", ctx.base_url, book_table, id)
+                        } else {
+                            format!("{}/app-benchmarks/{}/{}/{}", ctx.base_url, route, book_table, id)
+                        };
                         let start = std::time::Instant::now();
                         let result = ctx
                             .client
@@ -423,6 +469,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
@@ -442,6 +489,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[book_table, author_table],
             )
             .await;
@@ -457,13 +505,14 @@ pub async fn run(args: BenchArgs) {
                     &auth_user,
                     &auth_pass,
                     "app-benchmarks",
+                    &args.route,
                     &[book_table, author_table],
                 )
                 .await;
-                seed_author(author_table, &client, url, &auth_user, &auth_pass).await;
-                seed_books(book_table, &client, url, &auth_user, &auth_pass, 1000).await;
+                seed_author(author_table, &client, url, &auth_user, &auth_pass, &args.route).await;
+                seed_books(book_table, &client, url, &auth_user, &auth_pass, &args.route, 1000).await;
             }
-            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, 10_000).await;
+            let ids = fetch_book_ids(book_table, &client, args.primary_url(), &auth_user, &auth_pass, &args.route, 10_000).await;
             if ids.is_empty() {
                 tracing::error!("Failed to seed {} records.", book_table);
                 std::process::exit(1);
@@ -473,6 +522,7 @@ pub async fn run(args: BenchArgs) {
 
             write_phase(&args, "warming");
             let book_table_owned = book_table.to_string();
+            let route = args.route.clone();
             let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
                 args.vus,
                 duration,
@@ -486,13 +536,21 @@ pub async fn run(args: BenchArgs) {
                 move |ctx| {
                     let ids = ids.clone();
                     let book_table = book_table_owned.clone();
+                    let route = route.clone();
                     async move {
                         let idx = ctx.next_request_idx() as usize % ids.len();
                         let id = &ids[idx];
-                        let url = format!(
-                            "{}/app-benchmarks/{}/{}?select=id,title,author%7Bname%7D",
-                            ctx.base_url, book_table, id
-                        );
+                        let url = if route.is_empty() {
+                            format!(
+                                "{}/app-benchmarks/{}/{}?select=id,title,author%7Bname%7D",
+                                ctx.base_url, book_table, id
+                            )
+                        } else {
+                            format!(
+                                "{}/app-benchmarks/{}/{}/{}?select=id,title,author%7Bname%7D",
+                                ctx.base_url, route, book_table, id
+                            )
+                        };
                         let start = std::time::Instant::now();
                         let result = ctx
                             .client
@@ -513,6 +571,7 @@ pub async fn run(args: BenchArgs) {
                 base_url: &args.report_url,
                 auth_user: &auth_user,
                 auth_pass: &auth_pass,
+                route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
             reporter::report_results_with_snapshots(
@@ -532,6 +591,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[book_table, author_table],
             )
             .await;

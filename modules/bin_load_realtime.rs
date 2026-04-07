@@ -148,6 +148,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -165,6 +166,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -179,6 +181,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -195,6 +198,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -209,6 +213,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -226,6 +231,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -240,6 +246,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -256,6 +263,7 @@ pub async fn run(args: BenchArgs) {
                 &auth_user,
                 &auth_pass,
                 "app-benchmarks",
+                &args.route,
                 &[message_table],
             )
             .await;
@@ -323,6 +331,7 @@ async fn run_ws_test(
                 &stop,
                 &mut handles,
                 message_table,
+                &args.route,
             );
         }
 
@@ -359,7 +368,11 @@ async fn run_ws_test(
     // 4 concurrent publishers to saturate the server's write path.
     let num_publishers = 4;
     let mut pub_handles = Vec::new();
-    let pub_url = format!("{}/app-benchmarks/{}", args.primary_url(), message_table);
+    let pub_url = if args.route.is_empty() {
+        format!("{}/app-benchmarks/{}", args.primary_url(), message_table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}", args.primary_url(), args.route, message_table)
+    };
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -416,7 +429,7 @@ async fn run_ws_test(
                         for _ in 0..to_add {
                             spawn_ws_subscriber(
                                 args.primary_url(), &connector, &metrics, &tracker, &stop, &mut handles,
-                                message_table,
+                                message_table, &args.route,
                             );
                         }
                         current_spawned += to_add;
@@ -497,7 +510,11 @@ async fn run_ws_test(
             .insert("snapshots".to_string(), serde_json::json!(snaps));
     }
 
-    let url = format!("{}/app-benchmarks/TestRun", args.primary_url());
+    let url = if args.route.is_empty() {
+        format!("{}/app-benchmarks/TestRun", args.primary_url())
+    } else {
+        format!("{}/app-benchmarks/{}/TestRun", args.primary_url(), args.route)
+    };
     match client
         .post(&url)
         .basic_auth(auth_user, Some(auth_pass))
@@ -521,14 +538,16 @@ fn spawn_ws_subscriber(
     stop: &Arc<AtomicBool>,
     handles: &mut Vec<tokio::task::JoinHandle<()>>,
     message_table: &str,
+    route: &str,
 ) {
-    let ws_url = format!(
-        "{}/app-benchmarks/{}?stream=ws",
-        base_url
-            .replace("https://", "wss://")
-            .replace("http://", "ws://"),
-        message_table
-    );
+    let ws_base = base_url
+        .replace("https://", "wss://")
+        .replace("http://", "ws://");
+    let ws_url = if route.is_empty() {
+        format!("{}/app-benchmarks/{}?stream=ws", ws_base, message_table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}?stream=ws", ws_base, route, message_table)
+    };
     let m = metrics.clone();
     let t = tracker.clone();
     let s = stop.clone();
@@ -583,6 +602,7 @@ struct SseSubscriberCtx<'a> {
     tracker: &'a Arc<ConnectionTracker>,
     stop: &'a Arc<AtomicBool>,
     message_table: &'a str,
+    route: &'a str,
 }
 
 async fn run_sse_test(
@@ -622,7 +642,7 @@ async fn run_sse_test(
 
     let initial = if is_ramp { initial_vus } else { total_vus };
     let sse_ctx = SseSubscriberCtx {
-        base_url: &args.report_url,
+        base_url: args.primary_url(),
         auth_user,
         auth_pass,
         sse_client: &sse_client,
@@ -630,6 +650,7 @@ async fn run_sse_test(
         tracker: &tracker,
         stop: &stop,
         message_table,
+        route: &args.route,
     };
     for batch_start in (0..initial).step_by(BATCH_SIZE as usize) {
         if !should_continue_ramp(&tracker, total_vus) {
@@ -675,7 +696,11 @@ async fn run_sse_test(
     // Publish as fast as possible to measure max fan-out throughput
     let num_publishers = 4;
     let mut pub_handles = Vec::new();
-    let pub_url = format!("{}/app-benchmarks/{}", args.primary_url(), message_table);
+    let pub_url = if args.route.is_empty() {
+        format!("{}/app-benchmarks/{}", args.primary_url(), message_table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}", args.primary_url(), args.route, message_table)
+    };
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -772,6 +797,7 @@ async fn run_sse_test(
         base_url: &args.report_url,
         auth_user,
         auth_pass,
+        route: &args.route,
         run_group: args.run_group.as_deref(),
     };
     reporter::report_results_full(
@@ -790,7 +816,11 @@ fn spawn_sse_subscriber(
     ctx: &SseSubscriberCtx<'_>,
     handles: &mut Vec<tokio::task::JoinHandle<()>>,
 ) {
-    let sse_url = format!("{}/app-benchmarks/{}?stream=sse", ctx.base_url, ctx.message_table);
+    let sse_url = if ctx.route.is_empty() {
+        format!("{}/app-benchmarks/{}?stream=sse", ctx.base_url, ctx.message_table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}?stream=sse", ctx.base_url, ctx.route, ctx.message_table)
+    };
     let m = ctx.metrics.clone();
     let t = ctx.tracker.clone();
     let s = ctx.stop.clone();
@@ -874,13 +904,14 @@ async fn run_ws_publish_test(
 
         let batch_end = (batch_start + BATCH_SIZE).min(total_vus);
         for _vu in batch_start..batch_end {
-            let ws_url = format!(
-                "{}/app-benchmarks/{}?stream=ws",
-                args.primary_url()
-                    .replace("https://", "wss://")
-                    .replace("http://", "ws://"),
-                message_table
-            );
+            let ws_base = args.primary_url()
+                .replace("https://", "wss://")
+                .replace("http://", "ws://");
+            let ws_url = if args.route.is_empty() {
+                format!("{}/app-benchmarks/{}?stream=ws", ws_base, message_table)
+            } else {
+                format!("{}/app-benchmarks/{}/{}?stream=ws", ws_base, args.route, message_table)
+            };
             let m = metrics.clone();
             let t = tracker.clone();
             let s = stop.clone();
@@ -981,6 +1012,7 @@ async fn run_ws_publish_test(
         base_url: &args.report_url,
         auth_user,
         auth_pass,
+        route: &args.route,
         run_group: args.run_group.as_deref(),
     };
     reporter::report_results_full(
@@ -1147,7 +1179,11 @@ async fn run_mqtt_test(
     // Publish via REST → MQTT bridge (table writes trigger MQTT notifications)
     let num_publishers = 4;
     let mut pub_handles = Vec::new();
-    let pub_url = format!("{}/app-benchmarks/{}", args.primary_url(), message_table);
+    let pub_url = if args.route.is_empty() {
+        format!("{}/app-benchmarks/{}", args.primary_url(), message_table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}", args.primary_url(), args.route, message_table)
+    };
     for _ in 0..num_publishers {
         let pub_client = client.clone();
         let pub_user = auth_user.to_string();
@@ -1206,6 +1242,7 @@ async fn run_mqtt_test(
         base_url: &args.report_url,
         auth_user,
         auth_pass,
+        route: &args.route,
         run_group: args.run_group.as_deref(),
     };
     reporter::report_results_full(

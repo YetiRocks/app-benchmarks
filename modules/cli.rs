@@ -23,6 +23,10 @@ pub struct BenchArgs {
     #[arg(long, default_value = "admin:admin123")]
     pub auth: String,
 
+    /// Resource route prefix (e.g. "api" for /app-benchmarks/api/Table)
+    #[arg(long, default_value = "api")]
+    pub route: String,
+
     /// Warmup duration in seconds (metrics are discarded during warmup)
     #[arg(long, default_value = "5")]
     pub warmup: u64,
@@ -91,5 +95,14 @@ impl BenchArgs {
 
     pub fn is_ramp(&self) -> bool {
         self.mode == "ramp"
+    }
+
+    /// Build a table URL: {base_url}/app-benchmarks/{route}/{table}
+    pub fn table_url(&self, base_url: &str, table: &str) -> String {
+        if self.route.is_empty() {
+            format!("{}/app-benchmarks/{}", base_url, table)
+        } else {
+            format!("{}/app-benchmarks/{}/{}", base_url, self.route, table)
+        }
     }
 }

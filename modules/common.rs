@@ -47,10 +47,15 @@ pub async fn clear_tables(
     auth_user: &str,
     auth_pass: &str,
     app: &str,
+    route: &str,
     tables: &[&str],
 ) {
     for table in tables {
-        let url = format!("{}/{}/{}", base_url, app, table);
+        let url = if route.is_empty() {
+            format!("{}/{}/{}", base_url, app, table)
+        } else {
+            format!("{}/{}/{}/{}", base_url, app, route, table)
+        };
         match client
             .delete(&url)
             .basic_auth(auth_user, Some(auth_pass))
@@ -77,12 +82,14 @@ pub async fn fetch_book_ids(
     base_url: &str,
     auth_user: &str,
     auth_pass: &str,
+    route: &str,
     limit: usize,
 ) -> Vec<String> {
-    let url = format!(
-        "{}/app-benchmarks/{}?limit={}&select=id",
-        base_url, table, limit
-    );
+    let url = if route.is_empty() {
+        format!("{}/app-benchmarks/{}?limit={}&select=id", base_url, table, limit)
+    } else {
+        format!("{}/app-benchmarks/{}/{}?limit={}&select=id", base_url, route, table, limit)
+    };
     match client
         .get(&url)
         .basic_auth(auth_user, Some(auth_pass))
@@ -124,6 +131,7 @@ pub struct ReportContext<'a> {
     pub base_url: &'a str,
     pub auth_user: &'a str,
     pub auth_pass: &'a str,
+    pub route: &'a str,
     pub run_group: Option<&'a str>,
 }
 
@@ -136,13 +144,18 @@ pub async fn verify_write_results(
     base_url: &str,
     auth_user: &str,
     auth_pass: &str,
+    route: &str,
     expected: u64,
 ) -> Option<serde_json::Value> {
     // Wait for WAL consumer to drain (large writes need more time)
     tracing::info!("Waiting for WAL consumer drain...");
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-    let url = format!("{}/app-benchmarks/{}?_metadata=true", base_url, table);
+    let url = if route.is_empty() {
+        format!("{}/app-benchmarks/{}?_metadata=true", base_url, table)
+    } else {
+        format!("{}/app-benchmarks/{}/{}?_metadata=true", base_url, route, table)
+    };
     let resp = match client
         .get(&url)
         .basic_auth(auth_user, Some(auth_pass))

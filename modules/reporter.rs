@@ -136,7 +136,11 @@ pub async fn report_results_full(
             .insert("runGroup".to_string(), serde_json::json!(group));
     }
 
-    let url = format!("{}/app-benchmarks/TestRun", base_url);
+    let url = if ctx.route.is_empty() {
+        format!("{}/app-benchmarks/TestRun", base_url)
+    } else {
+        format!("{}/app-benchmarks/{}/TestRun", base_url, ctx.route)
+    };
     match client
         .post(&url)
         .basic_auth(auth_user, Some(auth_pass))

@@ -70,7 +70,7 @@ function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <img src="logo_white.svg" alt="Yeti" className="login-logo" />
+        <img src={`${STATIC_ROUTE}logo_white.svg`} alt="Yeti" className="login-logo" />
         <button className="btn btn-oauth btn-google" onClick={handleLogin}>
           <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }}>
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -214,7 +214,7 @@ function BenchmarkApp() {
     <div className="app">
       <nav className="nav">
         <div className="nav-left">
-          <a href="/"><img src="logo_white.svg" alt="Yeti" className="nav-logo" /></a>
+          <a href="/"><img src={`${STATIC_ROUTE}logo_white.svg`} alt="Yeti" className="nav-logo" /></a>
         </div>
         <span className="nav-title">Benchmarks</span>
         <div className="nav-right" />
