@@ -49,7 +49,7 @@ Restart yeti. The application compiles automatically on first load (~6 minutes f
 ### 2. Open the dashboard
 
 ```bash
-open https://localhost/app-benchmarks
+open https://localhost:9996/app-benchmarks
 ```
 
 The React dashboard shows all 17 test cards organized by category, with best results and run history.
@@ -57,7 +57,7 @@ The React dashboard shows all 17 test cards organized by category, with best res
 ### 3. Start a benchmark
 
 ```bash
-curl -X POST https://localhost/app-benchmarks/api/runner \
+curl -X POST https://localhost:9996/app-benchmarks/api/runner \
   -H "Content-Type: application/json" \
   -d '{ "test": "rest-read" }'
 ```
@@ -79,7 +79,7 @@ The runner spawns the `load-rest` binary, which seeds test data, warms up for 5 
 ### 4. Check runner status
 
 ```bash
-curl https://localhost/app-benchmarks/api/runner
+curl https://localhost:9996/app-benchmarks/api/runner
 ```
 
 Response (while running):
@@ -98,7 +98,7 @@ Response (while running):
 ### 5. View best results
 
 ```bash
-curl https://localhost/app-benchmarks/api/bestresults
+curl https://localhost:9996/app-benchmarks/api/bestresults
 ```
 
 Response:
@@ -136,7 +136,7 @@ Tests with no results are included (with no `best` field) so the dashboard can r
 ### 6. View run history
 
 ```bash
-curl https://localhost/app-benchmarks/api/history/rest-read
+curl https://localhost:9996/app-benchmarks/api/history/rest-read
 ```
 
 Response:
@@ -161,12 +161,12 @@ Response:
 
 ```bash
 # Custom VU count
-curl -X POST https://localhost/app-benchmarks/api/runner \
+curl -X POST https://localhost:9996/app-benchmarks/api/runner \
   -H "Content-Type: application/json" \
   -d '{ "test": "ws", "vus": 30000 }'
 
 # Multi-target cluster benchmark
-curl -X POST https://localhost/app-benchmarks/api/runner \
+curl -X POST https://localhost:9996/app-benchmarks/api/runner \
   -H "Content-Type: application/json" \
   -d '{
     "test": "rest-read",
@@ -177,7 +177,7 @@ curl -X POST https://localhost/app-benchmarks/api/runner \
 ### 8. Clear all results
 
 ```bash
-curl -X DELETE https://localhost/app-benchmarks/api/bestresults
+curl -X DELETE https://localhost:9996/app-benchmarks/api/bestresults
 ```
 
 Response:
