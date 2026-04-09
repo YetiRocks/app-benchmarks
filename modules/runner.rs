@@ -10,8 +10,6 @@ use tokio::task::JoinSet;
 pub struct ScenarioContext {
     pub client: Client,
     pub base_url: String,
-    pub auth_user: String,
-    pub auth_pass: String,
     pub metrics: Arc<Metrics>,
     pub vu_id: u64,
     /// Per-VU request counter for distributing IDs across the full pool.
@@ -35,8 +33,6 @@ where
     let LoadTestConfig {
         client,
         base_url,
-        auth_user,
-        auth_pass,
     } = config;
 
     // Support comma-separated URLs: distribute VUs round-robin across targets
@@ -55,8 +51,6 @@ where
         let ctx = Arc::new(ScenarioContext {
             client: client.clone(),
             base_url: target_url,
-            auth_user: auth_user.clone(),
-            auth_pass: auth_pass.clone(),
             metrics: metrics.clone(),
             vu_id,
             request_counter: AtomicU64::new(0),
@@ -119,8 +113,6 @@ where
     let LoadTestConfig {
         client,
         base_url,
-        auth_user,
-        auth_pass,
     } = config;
     let metrics = Arc::new(Metrics::new());
     let scenario_fn = Arc::new(scenario_fn);
@@ -137,16 +129,12 @@ where
                      metrics: &Arc<Metrics>,
                      client: &Client,
                      base_url: &str,
-                     auth_user: &str,
-                     auth_pass: &str,
                      scenario_fn: &Arc<F>,
                      deadline: Instant| {
         for _ in 0..count {
             let ctx = Arc::new(ScenarioContext {
                 client: client.clone(),
                 base_url: base_url.to_string(),
-                auth_user: auth_user.to_string(),
-                auth_pass: auth_pass.to_string(),
                 metrics: metrics.clone(),
                 vu_id: *start_id,
                 request_counter: AtomicU64::new(0),
@@ -170,8 +158,6 @@ where
         &metrics,
         &client,
         &base_url,
-        &auth_user,
-        &auth_pass,
         &scenario_fn,
         deadline,
     );
@@ -208,7 +194,7 @@ where
                     let to_add = ramp.step_vus.min(ramp.max_vus - current_vus);
                     spawn_vus(
                         &mut join_set, to_add, &mut vu_id_counter,
-                        &metrics, &client, &base_url, &auth_user, &auth_pass,
+                        &metrics, &client, &base_url,
                         &scenario_fn, deadline,
                     );
                     current_vus += to_add;

@@ -44,8 +44,6 @@ pub fn validate_error_rate(summary: &crate::metrics::MetricsSummary) {
 pub async fn clear_tables(
     client: &reqwest::Client,
     base_url: &str,
-    auth_user: &str,
-    auth_pass: &str,
     app: &str,
     route: &str,
     tables: &[&str],
@@ -56,12 +54,7 @@ pub async fn clear_tables(
         } else {
             format!("{}/{}/{}/{}", base_url, app, route, table)
         };
-        match client
-            .delete(&url)
-            .basic_auth(auth_user, Some(auth_pass))
-            .send()
-            .await
-        {
+        match client.delete(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 tracing::info!("Truncated {}/{}", app, table);
             },
@@ -80,8 +73,6 @@ pub async fn fetch_book_ids(
     table: &str,
     client: &reqwest::Client,
     base_url: &str,
-    auth_user: &str,
-    auth_pass: &str,
     route: &str,
     limit: usize,
 ) -> Vec<String> {
@@ -90,12 +81,7 @@ pub async fn fetch_book_ids(
     } else {
         format!("{}/app-benchmarks/{}/{}?limit={}&select=id", base_url, route, table, limit)
     };
-    match client
-        .get(&url)
-        .basic_auth(auth_user, Some(auth_pass))
-        .send()
-        .await
-    {
+    match client.get(&url).send().await {
         Ok(resp) => {
             if let Ok(data) = resp.json::<serde_json::Value>().await {
                 let arr = if data.is_array() {
@@ -121,16 +107,12 @@ pub async fn fetch_book_ids(
 pub struct LoadTestConfig {
     pub client: reqwest::Client,
     pub base_url: String,
-    pub auth_user: String,
-    pub auth_pass: String,
 }
 
 /// Borrowed HTTP session config for reporters (runs after the test, no ownership transfer).
 pub struct ReportContext<'a> {
     pub client: &'a reqwest::Client,
     pub base_url: &'a str,
-    pub auth_user: &'a str,
-    pub auth_pass: &'a str,
     pub route: &'a str,
     pub run_group: Option<&'a str>,
 }
@@ -142,8 +124,6 @@ pub async fn verify_write_results(
     table: &str,
     client: &reqwest::Client,
     base_url: &str,
-    auth_user: &str,
-    auth_pass: &str,
     route: &str,
     expected: u64,
 ) -> Option<serde_json::Value> {
@@ -156,12 +136,7 @@ pub async fn verify_write_results(
     } else {
         format!("{}/app-benchmarks/{}/{}?_metadata=true", base_url, route, table)
     };
-    let resp = match client
-        .get(&url)
-        .basic_auth(auth_user, Some(auth_pass))
-        .send()
-        .await
-    {
+    let resp = match client.get(&url).send().await {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("metadata fetch failed: {}", e);

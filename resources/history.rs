@@ -26,6 +26,6 @@ resource!(History {
             tb.cmp(ta)
         });
 
-        reply().json(json!({ "runs": filtered }))
+        ok(json!({ "runs": filtered }))
     }
 });

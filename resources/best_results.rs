@@ -8,7 +8,9 @@
 
 use yeti_sdk::prelude::*;
 
-// Test definitions — single source of truth (matches benchmark_runner.rs TESTS)
+// Test definitions — served to the UI which owns the runtime parameters.
+// The runner accepts whatever the UI sends (binary, duration, vus) and
+// validates only the binary name against an allowlist.
 const TESTS: &[(&str, &str, &str, u64, u64, &str)] = &[
     // (id, name, binary, duration, vus, category)
     ("rest-read", "REST Read", "load-rest", 30, 100, "throughput"),
@@ -21,7 +23,7 @@ const TESTS: &[(&str, &str, &str, u64, u64, &str)] = &[
     ("graphql-batch-write", "GraphQL Batch Write", "load-graphql", 30, 100, "throughput"),
     ("graphql-update", "GraphQL Update", "load-graphql", 30, 100, "throughput"),
     ("graphql-join", "GraphQL Join", "load-graphql", 30, 100, "throughput"),
-    ("vector-embed", "Vector Embed", "load-vector", 30, 10, "throughput"),
+    ("vector-embed", "Vector Embed", "load-vector", 30, 100, "throughput"),
     ("vector-search", "Vector Search", "load-vector", 30, 100, "throughput"),
     ("blob-retrieval", "150k Blob Retrieval", "load-blob", 30, 100, "throughput"),
     ("ws", "WS Fan-Out", "load-realtime", 30, 15_000, "throughput"),
@@ -117,7 +119,7 @@ resource!(BestResults {
             tests.insert(id.to_string(), entry);
         }
 
-        reply().json(json!({
+        ok(json!({
             "tests": tests,
             "categories": [
                 { "category": "throughput", "label": "Throughput - 30s" },
@@ -127,6 +129,6 @@ resource!(BestResults {
     delete(_request, ctx) => {
         let table = ctx.get_table("TestRun")?;
         let count = table.delete_all().await?;
-        reply().json(json!({ "deleted": count }))
+        ok(json!({ "deleted": count }))
     }
 });

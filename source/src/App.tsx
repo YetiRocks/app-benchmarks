@@ -176,7 +176,13 @@ function BenchmarkApp() {
     try {
       const resp = await api('/runner', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test: testId, targetUrl: savedUrl, vus: testMap[testId]?.vus }),
+        body: JSON.stringify({
+          test: testId,
+          binary: testMap[testId]?.binary,
+          duration: testMap[testId]?.duration,
+          vus: testMap[testId]?.vus,
+          targetUrl: savedUrl,
+        }),
       })
       if (!resp.ok) {
         const data = await resp.json().catch(() => null)

@@ -19,10 +19,6 @@ pub struct BenchArgs {
     #[arg(long, default_value = "https://localhost")]
     pub base_url: String,
 
-    /// Basic auth credentials (user:pass)
-    #[arg(long, default_value = "admin:admin123")]
-    pub auth: String,
-
     /// Resource route prefix (e.g. "api" for /app-benchmarks/api/Table)
     #[arg(long, default_value = "api")]
     pub route: String,
@@ -76,13 +72,6 @@ pub fn write_phase(args: &BenchArgs, phase: &str) {
 }
 
 impl BenchArgs {
-    pub fn auth_parts(&self) -> (&str, &str) {
-        match self.auth.split_once(':') {
-            Some((user, pass)) => (user, pass),
-            None => (&self.auth, ""),
-        }
-    }
-
     /// First URL from comma-separated list (for seeding/cleanup)
     pub fn primary_url(&self) -> &str {
         self.base_url.split(',').next().unwrap_or(&self.base_url).trim()

@@ -11,41 +11,10 @@
 use std::sync::{Mutex, OnceLock};
 use yeti_sdk::prelude::*;
 
-// ── Test definitions ──
+// ── Allowed binaries (security: only known names can be executed) ──
 
-struct TestDef {
-    id: &'static str,
-    name: &'static str,
-    binary: &'static str,
-    duration: u64,
-    vus: u64,
-    category: &'static str,
-}
-
-impl TestDef {
-    const fn quick(id: &'static str, name: &'static str, binary: &'static str, vus: u64) -> Self {
-        Self { id, name, binary, duration: 30, vus, category: "throughput" }
-    }
-}
-
-const TESTS: &[TestDef] = &[
-    TestDef::quick("rest-read", "REST Read", "load-rest", 100),
-    TestDef::quick("rest-write", "REST Write", "load-rest", 100),
-    TestDef::quick("rest-batch-write", "REST Batch Write", "load-rest", 100),
-    TestDef::quick("rest-update", "REST Update", "load-rest", 100),
-    TestDef::quick("rest-join", "REST Join", "load-rest", 100),
-    TestDef::quick("graphql-read", "GraphQL Read", "load-graphql", 100),
-    TestDef::quick("graphql-mutation", "GraphQL Write", "load-graphql", 100),
-    TestDef::quick("graphql-batch-write", "GraphQL Batch Write", "load-graphql", 100),
-    TestDef::quick("graphql-update", "GraphQL Update", "load-graphql", 100),
-    TestDef::quick("graphql-join", "GraphQL Join", "load-graphql", 100),
-    TestDef::quick("vector-embed", "Vector Embed", "load-vector", 10),
-    TestDef::quick("vector-search", "Vector Search", "load-vector", 100),
-    TestDef::quick("blob-retrieval", "150k Blob Retrieval", "load-blob", 100),
-    TestDef::quick("ws", "WS Fan-Out", "load-realtime", 15_000),
-    TestDef::quick("ws-publish", "WS Fan-In", "load-realtime", 100),
-    TestDef::quick("sse", "SSE Fan-Out", "load-realtime", 15_000),
-    TestDef::quick("mqtt", "MQTT Fan-Out", "load-realtime", 15_000),
+const ALLOWED_BINARIES: &[&str] = &[
+    "load-rest", "load-graphql", "load-vector", "load-blob", "load-realtime",
 ];
 
 // ── Runner state ──
@@ -275,12 +244,18 @@ resource!(BenchmarkRunner {
     post(request, ctx) => {
         let body = request.json_value()?;
         let test_id = body.get("test").and_then(|v| v.as_str())
-            .ok_or_else(|| YetiError::Validation("Missing 'test' field".into()))?;
+            .ok_or_else(|| YetiError::Validation("Missing 'test' field".into()))?.to_string();
 
-        let test_def = match TESTS.iter().find(|t| t.id == test_id) {
-            Some(t) => t,
-            None => return bad_request(&format!("Unknown test: {}", test_id)),
-        };
+        // Test parameters come from the UI — no server-side test registry
+        let binary_name = body.get("binary").and_then(|v| v.as_str())
+            .ok_or_else(|| YetiError::Validation("Missing 'binary' field".into()))?;
+        let duration = body.get("duration").and_then(|v| v.as_u64()).unwrap_or(30);
+        let total_vus = body.get("vus").and_then(|v| v.as_u64()).unwrap_or(100);
+
+        // Security: only allow known binary names
+        if !ALLOWED_BINARIES.contains(&binary_name) {
+            return bad_request(&format!("Unknown binary: {}", binary_name));
+        }
 
         {
             let state = runner_state().lock().unwrap_or_else(|e| e.into_inner());
@@ -289,17 +264,13 @@ resource!(BenchmarkRunner {
             }
         }
 
-        // Find the load test binary
-        let binary_path = match find_binary(test_def.binary) {
+        let binary_path = match find_binary(binary_name) {
             Some(p) => p,
             None => return bad_request(&format!(
-                "Load test binary '{}' not found. Run 'cargo build --release --bins' in the app-benchmarks directory.",
-                test_def.binary
+                "Load test binary '{}' not found. Ensure binaries are compiled.",
+                binary_name
             )),
         };
-
-        let duration = test_def.duration;
-        let total_vus = body.get("vus").and_then(|v| v.as_u64()).unwrap_or(test_def.vus);
         // Auto-determine process count: 1 process per 10k VUs, minimum 1
         const MAX_VUS_PER_PROCESS: u64 = 5_000;
         let processes = body.get("processes").and_then(|v| v.as_u64())
@@ -330,14 +301,12 @@ resource!(BenchmarkRunner {
 
         for (i, target) in targets.iter().enumerate() {
             let mut cmd = std::process::Command::new(&binary_path);
-            let auth = body.get("auth").and_then(|v| v.as_str()).unwrap_or("admin:admin123");
             cmd.arg("--test").arg(&test_id)
                 .arg("--base-url").arg(target)
                 .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(total_vus.to_string())
                 .arg("--warmup").arg("5")
-                .arg("--auth").arg(auth)
                 .arg("--run-group").arg(&run_group);
 
             // Only skip seed on processes after the first

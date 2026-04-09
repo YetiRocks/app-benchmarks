@@ -39,9 +39,6 @@ fn urlencoding(s: String) -> String {
 
 pub async fn run(args: BenchArgs) {
     crate::common::init_tracing();
-    let (auth_user, auth_pass) = args.auth_parts();
-    let auth_user = auth_user.to_string();
-    let auth_pass = auth_pass.to_string();
     let client = client::build_client();
     let duration = Duration::from_secs(args.duration);
     let warmup = Duration::from_secs(args.warmup);
@@ -63,8 +60,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[article_table],
@@ -81,8 +76,6 @@ pub async fn run(args: BenchArgs) {
                 LoadTestConfig {
                     client: client.clone(),
                     base_url: args.base_url.clone(),
-                    auth_user: auth_user.clone(),
-                    auth_pass: auth_pass.clone(),
                 },
                 move |ctx| {
                     let article_table = article_table_owned.clone();
@@ -106,13 +99,7 @@ pub async fn run(args: BenchArgs) {
                             format!("{}/app-benchmarks/{}/{}/", ctx.base_url, route, article_table)
                         };
                         let start = std::time::Instant::now();
-                        let result = ctx
-                            .client
-                            .post(&url)
-                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
-                            .json(&body)
-                            .send()
-                            .await;
+                        let result = ctx.client.post(&url).json(&body).send().await;
                         ctx.record_response(start, result).await;
                     }
                 },
@@ -124,8 +111,6 @@ pub async fn run(args: BenchArgs) {
             let rctx = ReportContext {
                 client: &client,
                 base_url: &args.report_url,
-                auth_user: &auth_user,
-                auth_pass: &auth_pass,
                 route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
@@ -143,8 +128,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[article_table],
@@ -158,8 +141,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[article_table],
@@ -179,12 +160,7 @@ pub async fn run(args: BenchArgs) {
                     ),
                 });
                 let url = args.table_url(args.primary_url(), article_table);
-                let _ = client
-                    .post(format!("{}/", url))
-                    .basic_auth(&auth_user, Some(&auth_pass))
-                    .json(&body)
-                    .send()
-                    .await;
+                let _ = client.post(format!("{}/", url)).json(&body).send().await;
             }
             tracing::info!("Waiting for embeddings to process...");
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -199,8 +175,6 @@ pub async fn run(args: BenchArgs) {
                 LoadTestConfig {
                     client: client.clone(),
                     base_url: args.base_url.clone(),
-                    auth_user: auth_user.clone(),
-                    auth_pass: auth_pass.clone(),
                 },
                 move |ctx| {
                     let article_table = article_table_owned.clone();
@@ -232,12 +206,7 @@ pub async fn run(args: BenchArgs) {
                             )
                         };
                         let start = std::time::Instant::now();
-                        let result = ctx
-                            .client
-                            .get(&url)
-                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
-                            .send()
-                            .await;
+                        let result = ctx.client.get(&url).send().await;
                         ctx.record_response(start, result).await;
                     }
                 },
@@ -249,8 +218,6 @@ pub async fn run(args: BenchArgs) {
             let rctx = ReportContext {
                 client: &client,
                 base_url: &args.report_url,
-                auth_user: &auth_user,
-                auth_pass: &auth_pass,
                 route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
@@ -268,8 +235,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[article_table],

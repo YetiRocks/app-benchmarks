@@ -46,8 +46,6 @@ pub async fn report_results_full(
 ) {
     let client = ctx.client;
     let base_url = ctx.base_url;
-    let auth_user = ctx.auth_user;
-    let auth_pass = ctx.auth_pass;
     let summary_text = summary.format_summary(duration_secs);
     tracing::info!("=== {} ===", test_name);
     tracing::info!("{}", summary_text);
@@ -141,13 +139,7 @@ pub async fn report_results_full(
     } else {
         format!("{}/app-benchmarks/{}/TestRun", base_url, ctx.route)
     };
-    match client
-        .post(&url)
-        .basic_auth(auth_user, Some(auth_pass))
-        .json(&payload)
-        .send()
-        .await
-    {
+    match client.post(&url).json(&payload).send().await {
         Ok(resp) => {
             let status = resp.status();
             if !status.is_success() {

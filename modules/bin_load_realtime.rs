@@ -107,9 +107,6 @@ pub async fn run(args: BenchArgs) {
             }
         }
     }
-    let (auth_user, auth_pass) = args.auth_parts();
-    let auth_user = auth_user.to_string();
-    let auth_pass = auth_pass.to_string();
     let client = client::build_client();
 
     // Adaptive duration: extend test if ramp time exceeds configured duration.
@@ -145,8 +142,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -156,15 +151,13 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "warming");
             let is_ramp = args.test.as_str() == "ws-ramp";
             run_ws_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, is_ramp, message_table,
+                &args, &client, duration, warmup, is_ramp, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -178,8 +171,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -188,15 +179,13 @@ pub async fn run(args: BenchArgs) {
 
             write_phase(&args, "warming");
             run_ws_publish_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, message_table,
+                &args, &client, duration, warmup, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -210,8 +199,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -221,15 +208,13 @@ pub async fn run(args: BenchArgs) {
             write_phase(&args, "warming");
             let is_ramp = args.test.as_str() == "sse-ramp";
             run_sse_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, is_ramp, message_table,
+                &args, &client, duration, warmup, is_ramp, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -243,8 +228,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -253,15 +236,13 @@ pub async fn run(args: BenchArgs) {
 
             write_phase(&args, "warming");
             run_mqtt_test(
-                &args, &auth_user, &auth_pass, &client, duration, warmup, message_table,
+                &args, &client, duration, warmup, message_table,
             )
             .await;
             write_phase(&args, "cleaning");
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &[message_table],
@@ -279,8 +260,6 @@ pub async fn run(args: BenchArgs) {
 
 async fn run_ws_test(
     args: &BenchArgs,
-    auth_user: &str,
-    auth_pass: &str,
     client: &reqwest::Client,
     duration: Duration,
     warmup: Duration,
@@ -375,8 +354,6 @@ async fn run_ws_test(
     };
     for _ in 0..num_publishers {
         let pub_client = client.clone();
-        let pub_user = auth_user.to_string();
-        let pub_pass = auth_pass.to_string();
         let pub_stop = stop.clone();
         let pub_tracker = tracker.clone();
         let pub_url = pub_url.clone();
@@ -387,12 +364,7 @@ async fn run_ws_test(
                     "title": "bench",
                     "content": "benchmark message",
                 });
-                let _ = pub_client
-                    .post(&pub_url)
-                    .basic_auth(&pub_user, Some(&pub_pass))
-                    .json(&body)
-                    .send()
-                    .await;
+                let _ = pub_client.post(&pub_url).json(&body).send().await;
                 pub_tracker.on_publish();
             }
         }));
@@ -515,13 +487,7 @@ async fn run_ws_test(
     } else {
         format!("{}/app-benchmarks/{}/TestRun", args.primary_url(), args.route)
     };
-    match client
-        .post(&url)
-        .basic_auth(auth_user, Some(auth_pass))
-        .json(&payload)
-        .send()
-        .await
-    {
+    match client.post(&url).json(&payload).send().await {
         Ok(resp) if !resp.status().is_success() => {
             tracing::warn!("POST {} returned {}", url, resp.status());
         },
@@ -595,8 +561,6 @@ fn spawn_ws_subscriber(
 
 struct SseSubscriberCtx<'a> {
     base_url: &'a str,
-    auth_user: &'a str,
-    auth_pass: &'a str,
     sse_client: &'a reqwest::Client,
     metrics: &'a Arc<Metrics>,
     tracker: &'a Arc<ConnectionTracker>,
@@ -607,8 +571,6 @@ struct SseSubscriberCtx<'a> {
 
 async fn run_sse_test(
     args: &BenchArgs,
-    auth_user: &str,
-    auth_pass: &str,
     client: &reqwest::Client,
     duration: Duration,
     warmup: Duration,
@@ -643,8 +605,6 @@ async fn run_sse_test(
     let initial = if is_ramp { initial_vus } else { total_vus };
     let sse_ctx = SseSubscriberCtx {
         base_url: args.primary_url(),
-        auth_user,
-        auth_pass,
         sse_client: &sse_client,
         metrics: &metrics,
         tracker: &tracker,
@@ -703,8 +663,6 @@ async fn run_sse_test(
     };
     for _ in 0..num_publishers {
         let pub_client = client.clone();
-        let pub_user = auth_user.to_string();
-        let pub_pass = auth_pass.to_string();
         let pub_stop = stop.clone();
         let pub_tracker = tracker.clone();
         let pub_url = pub_url.clone();
@@ -715,12 +673,7 @@ async fn run_sse_test(
                     "title": "bench",
                     "content": "benchmark sse message",
                 });
-                let _ = pub_client
-                    .post(&pub_url)
-                    .basic_auth(&pub_user, Some(&pub_pass))
-                    .json(&body)
-                    .send()
-                    .await;
+                let _ = pub_client.post(&pub_url).json(&body).send().await;
                 pub_tracker.on_publish();
             }
         }));
@@ -795,8 +748,6 @@ async fn run_sse_test(
     let rctx = ReportContext {
         client,
         base_url: &args.report_url,
-        auth_user,
-        auth_pass,
         route: &args.route,
         run_group: args.run_group.as_deref(),
     };
@@ -825,15 +776,11 @@ fn spawn_sse_subscriber(
     let t = ctx.tracker.clone();
     let s = ctx.stop.clone();
     let c = ctx.sse_client.clone();
-    let sse_user = ctx.auth_user.to_string();
-    let sse_pass = ctx.auth_pass.to_string();
 
     handles.push(tokio::spawn(async move {
         let resp = tokio::time::timeout(
             Duration::from_secs(10),
-            c.get(&sse_url)
-                .basic_auth(&sse_user, Some(&sse_pass))
-                .send(),
+            c.get(&sse_url).send(),
         )
         .await;
 
@@ -877,8 +824,6 @@ fn spawn_sse_subscriber(
 
 async fn run_ws_publish_test(
     args: &BenchArgs,
-    auth_user: &str,
-    auth_pass: &str,
     client: &reqwest::Client,
     duration: Duration,
     warmup: Duration,
@@ -1010,8 +955,6 @@ async fn run_ws_publish_test(
     let rctx = ReportContext {
         client,
         base_url: &args.report_url,
-        auth_user,
-        auth_pass,
         route: &args.route,
         run_group: args.run_group.as_deref(),
     };
@@ -1033,8 +976,6 @@ async fn run_ws_publish_test(
 
 async fn run_mqtt_test(
     args: &BenchArgs,
-    auth_user: &str,
-    auth_pass: &str,
     client: &reqwest::Client,
     duration: Duration,
     warmup: Duration,
@@ -1079,8 +1020,6 @@ async fn run_mqtt_test(
             let s = stop.clone();
             let topic = topic.clone();
             let host = mqtt_host.clone();
-            let user = auth_user.to_string();
-            let pass = auth_pass.to_string();
 
             handles.push(tokio::spawn(async move {
                 let client_id = format!("bench-{}-{}", vu, &Uuid::new_v4().to_string()[..8]);
@@ -1186,8 +1125,6 @@ async fn run_mqtt_test(
     };
     for _ in 0..num_publishers {
         let pub_client = client.clone();
-        let pub_user = auth_user.to_string();
-        let pub_pass = auth_pass.to_string();
         let pub_stop = stop.clone();
         let pub_tracker = tracker.clone();
         let pub_url = pub_url.clone();
@@ -1198,12 +1135,7 @@ async fn run_mqtt_test(
                     "title": "bench",
                     "content": "mqtt benchmark message",
                 });
-                let _ = pub_client
-                    .post(&pub_url)
-                    .basic_auth(&pub_user, Some(&pub_pass))
-                    .json(&body)
-                    .send()
-                    .await;
+                let _ = pub_client.post(&pub_url).json(&body).send().await;
                 pub_tracker.on_publish();
             }
         }));
@@ -1240,8 +1172,6 @@ async fn run_mqtt_test(
     let rctx = ReportContext {
         client,
         base_url: &args.report_url,
-        auth_user,
-        auth_pass,
         route: &args.route,
         run_group: args.run_group.as_deref(),
     };

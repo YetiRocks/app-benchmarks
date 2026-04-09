@@ -11,9 +11,6 @@ use uuid::Uuid;
 
 pub async fn run(args: BenchArgs) {
     crate::common::init_tracing();
-    let (auth_user, auth_pass) = args.auth_parts();
-    let auth_user = auth_user.to_string();
-    let auth_pass = auth_pass.to_string();
     let client = client::build_client();
     let duration = Duration::from_secs(args.duration);
     let warmup = Duration::from_secs(args.warmup);
@@ -34,8 +31,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &["BlobData"],
@@ -55,12 +50,7 @@ pub async fn run(args: BenchArgs) {
                 "content": large_content,
             });
             let url = args.table_url(args.primary_url(), "BlobData");
-            match client
-                .post(format!("{}/", url))
-                .basic_auth(&auth_user, Some(&auth_pass))
-                .json(&body)
-                .send()
-                .await
+            match client.post(format!("{}/", url)).json(&body).send().await
             {
                 Ok(resp) if resp.status().is_success() => {
                     tracing::info!("Setup complete.");
@@ -88,8 +78,6 @@ pub async fn run(args: BenchArgs) {
                 LoadTestConfig {
                     client: client.clone(),
                     base_url: args.base_url.clone(),
-                    auth_user: auth_user.clone(),
-                    auth_pass: auth_pass.clone(),
                 },
                 move |ctx| {
                     let blob_id = blob_id.clone();
@@ -101,12 +89,7 @@ pub async fn run(args: BenchArgs) {
                             format!("{}/app-benchmarks/{}/BlobData/{}", ctx.base_url, route, blob_id)
                         };
                         let start = std::time::Instant::now();
-                        let result = ctx
-                            .client
-                            .get(&url)
-                            .basic_auth(&ctx.auth_user, Some(&ctx.auth_pass))
-                            .send()
-                            .await;
+                        let result = ctx.client.get(&url).send().await;
                         ctx.record_response(start, result).await;
                     }
                 },
@@ -118,8 +101,6 @@ pub async fn run(args: BenchArgs) {
             let rctx = ReportContext {
                 client: &client,
                 base_url: &args.report_url,
-                auth_user: &auth_user,
-                auth_pass: &auth_pass,
                 route: &args.route,
                 run_group: args.run_group.as_deref(),
             };
@@ -137,8 +118,6 @@ pub async fn run(args: BenchArgs) {
             clear_tables(
                 &client,
                 args.primary_url(),
-                &auth_user,
-                &auth_pass,
                 "app-benchmarks",
                 &args.route,
                 &["BlobData"],
