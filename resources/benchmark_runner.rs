@@ -330,12 +330,14 @@ resource!(BenchmarkRunner {
 
         for (i, target) in targets.iter().enumerate() {
             let mut cmd = std::process::Command::new(&binary_path);
+            let auth = body.get("auth").and_then(|v| v.as_str()).unwrap_or("admin:admin123");
             cmd.arg("--test").arg(&test_id)
                 .arg("--base-url").arg(target)
                 .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(total_vus.to_string())
                 .arg("--warmup").arg("5")
+                .arg("--auth").arg(auth)
                 .arg("--run-group").arg(&run_group);
 
             // Only skip seed on processes after the first
