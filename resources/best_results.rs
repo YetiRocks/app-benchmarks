@@ -34,7 +34,7 @@ const TESTS: &[(&str, &str, &str, u64, u64, &str)] = &[
 
 resource!(BestResults {
     name = "bestresults",
-    get(_request, ctx) => {
+    get(ctx) => {
         // Fetch all TestRun records and find best throughput per test
         let runs = match ctx.get_table("TestRun") {
             Ok(table) => table.get_all().await.unwrap_or_default(),
@@ -126,7 +126,7 @@ resource!(BestResults {
             ],
         }))
     },
-    delete(_request, ctx) => {
+    delete(ctx) => {
         let table = ctx.get_table("TestRun")?;
         let count = table.delete_all().await?;
         ok(json!({ "deleted": count }))

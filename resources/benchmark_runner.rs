@@ -94,7 +94,7 @@ fn find_binary(binary_name: &str) -> Option<String> {
 
 resource!(BenchmarkRunner {
     name = "runner",
-    get(_request, ctx) => {
+    get(ctx) => {
         let state = runner_state().lock().unwrap_or_else(|e| e.into_inner()).clone();
         let mut current = state.clone();
 
@@ -241,8 +241,8 @@ resource!(BenchmarkRunner {
             }))
     },
 
-    post(request, ctx) => {
-        let body = request.json_value()?;
+    post(ctx) => {
+        let body = ctx.require_json_body()?.clone();
         let test_id = body.get("test").and_then(|v| v.as_str())
             .ok_or_else(|| YetiError::Validation("Missing 'test' field".into()))?.to_string();
 

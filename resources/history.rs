@@ -8,7 +8,7 @@ use yeti_sdk::prelude::*;
 
 resource!(History {
     name = "history",
-    get(request, ctx) => {
+    get(ctx) => {
         let test_name = ctx.require_id()?;
 
         let runs = match ctx.get_table("TestRun") {
