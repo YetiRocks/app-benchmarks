@@ -287,9 +287,8 @@ resource!(BenchmarkRunner {
             .or_else(|| std::env::var("YETI_BENCHMARK_TARGET").ok())
             .unwrap_or_else(|| "https://localhost".to_string());
 
-        // One process per target, each with full VUs. Results aggregated by runGroup.
+        // One process per target, each with full VUs.
         let targets: Vec<&str> = target_raw.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        let run_group = format!("{}-{}", test_id, unix_timestamp().unwrap_or(0));
 
         // First: seed on all targets (single process, blocking)
         // The first target seeds normally; subsequent targets get seeded too
@@ -307,7 +306,6 @@ resource!(BenchmarkRunner {
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(total_vus.to_string())
                 .arg("--warmup").arg("5")
-                .arg("--run-group").arg(&run_group);
 
             // Only skip seed on processes after the first
             // (first process seeds on its own target; others skip since they'll seed too)

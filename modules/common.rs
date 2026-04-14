@@ -114,7 +114,6 @@ pub struct ReportContext<'a> {
     pub client: &'a reqwest::Client,
     pub base_url: &'a str,
     pub route: &'a str,
-    pub run_group: Option<&'a str>,
 }
 
 /// Post-write verification: fetches table metadata, compares record count to expected,

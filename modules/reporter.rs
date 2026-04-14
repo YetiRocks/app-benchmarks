@@ -129,11 +129,6 @@ pub async fn report_results_full(
             .insert("snapshots".to_string(), serde_json::json!(snaps));
     }
 
-    if let Some(group) = ctx.run_group {
-        payload.as_object_mut().unwrap()
-            .insert("runGroup".to_string(), serde_json::json!(group));
-    }
-
     let url = if ctx.route.is_empty() {
         format!("{}/app-benchmarks/TestRun", base_url)
     } else {
