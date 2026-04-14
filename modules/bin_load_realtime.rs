@@ -1000,6 +1000,25 @@ async fn run_mqtt_test(
         .to_string();
     let mqtt_port = 8883u16;
 
+    // Pre-flight: verify broker is accepting connections before ramping.
+    // Previous runs may have left stale connections; wait for the broker to drain.
+    for attempt in 1..=10 {
+        match tokio::time::timeout(
+            Duration::from_secs(3),
+            tokio::net::TcpStream::connect(format!("{}:{}", mqtt_host, mqtt_port)),
+        ).await {
+            Ok(Ok(_)) => break,
+            _ => {
+                if attempt == 10 {
+                    tracing::error!("Broker not accepting connections after 10 attempts, proceeding anyway");
+                } else {
+                    tracing::info!("Waiting for broker readiness (attempt {}/10)...", attempt);
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+            },
+        }
+    }
+
     tracing::info!(
         "Connecting {} MQTT subscribers to {}:{} on topic '{}'...",
         total_vus, mqtt_host, mqtt_port, topic
@@ -1164,6 +1183,16 @@ async fn run_mqtt_test(
     }
     for h in handles {
         h.await.ok();
+    }
+
+    // Brief cooldown after mass disconnection. The pre-flight check at the
+    // start of run_mqtt_test protects the *next* run; this just gives the OS
+    // a head start on reclaiming TIME_WAIT sockets.
+    let peak = tracker.peak.load(Ordering::Relaxed);
+    if peak > 100 {
+        let drain_secs = (peak as f64 / 2000.0).ceil().max(2.0).min(5.0) as u64;
+        tracing::info!("Post-test cooldown ({}s for {} connections)...", drain_secs, peak);
+        tokio::time::sleep(Duration::from_secs(drain_secs)).await;
     }
 
     let elapsed = measure_start.elapsed().as_secs_f64();
