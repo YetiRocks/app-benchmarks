@@ -305,7 +305,7 @@ resource!(BenchmarkRunner {
                 .arg("--report-url").arg("https://localhost")
                 .arg("--duration").arg(duration.to_string())
                 .arg("--vus").arg(total_vus.to_string())
-                .arg("--warmup").arg("5")
+                .arg("--warmup").arg("5");
 
             // Only skip seed on processes after the first
             // (first process seeds on its own target; others skip since they'll seed too)

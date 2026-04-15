@@ -139,10 +139,60 @@ pub async fn report_results_full(
             let status = resp.status();
             if !status.is_success() {
                 tracing::warn!("POST {} returned {}", url, status);
+            } else {
+                // Prune old records — keep only the 5 most recent per test name
+                prune_old_results(ctx, test_name, 5).await;
             }
         },
         Err(e) => {
             tracing::warn!("Failed to POST results to {}: {}", url, e);
         },
+    }
+}
+
+/// Delete old TestRun records, keeping only `keep` most recent per test name.
+async fn prune_old_results(ctx: &ReportContext<'_>, test_name: &str, keep: usize) {
+    let list_url = if ctx.route.is_empty() {
+        format!("{}/app-benchmarks/TestRun?limit=10000&select=id,testName,timestamp", ctx.base_url)
+    } else {
+        format!("{}/app-benchmarks/{}/TestRun?limit=10000&select=id,testName,timestamp", ctx.base_url, ctx.route)
+    };
+    let records = match ctx.client.get(&list_url).send().await {
+        Ok(resp) => match resp.json::<Vec<serde_json::Value>>().await {
+            Ok(v) => v,
+            Err(_) => return,
+        },
+        Err(_) => return,
+    };
+
+    let mut matching: Vec<&serde_json::Value> = records
+        .iter()
+        .filter(|r| r.get("testName").and_then(|v| v.as_str()) == Some(test_name))
+        .collect();
+
+    // Sort newest first
+    matching.sort_by(|a, b| {
+        let ta = a.get("timestamp").and_then(|v| v.as_str()).unwrap_or("");
+        let tb = b.get("timestamp").and_then(|v| v.as_str()).unwrap_or("");
+        tb.cmp(ta)
+    });
+
+    // Delete everything beyond `keep`
+    for old in matching.iter().skip(keep) {
+        if let Some(id) = old.get("id").and_then(|v| v.as_str()) {
+            let delete_url = if ctx.route.is_empty() {
+                format!("{}/app-benchmarks/TestRun/{}", ctx.base_url, id)
+            } else {
+                format!("{}/app-benchmarks/{}/TestRun/{}", ctx.base_url, ctx.route, id)
+            };
+            if let Err(e) = ctx.client.delete(&delete_url).send().await {
+                tracing::warn!("Failed to prune old result {}: {}", id, e);
+            }
+        }
+    }
+
+    let pruned = matching.len().saturating_sub(keep);
+    if pruned > 0 {
+        tracing::info!("Pruned {} old '{}' results (kept {})", pruned, test_name, keep);
     }
 }

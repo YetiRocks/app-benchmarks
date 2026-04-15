@@ -273,6 +273,11 @@ pub async fn run(args: BenchArgs) {
 
             let summary = metrics.summary(elapsed);
             validate_error_rate(&summary);
+            let rctx = ReportContext {
+                client: &client,
+                base_url: &args.report_url,
+                route: &args.route,
+            };
             reporter::report_results_with_snapshots(&rctx, "graphql-batch-write", elapsed, &summary, &snapshots, args.vus).await;
 
             write_phase(&args, "cleaning");
@@ -329,8 +334,13 @@ pub async fn run(args: BenchArgs) {
             ).await;
             let summary = metrics.summary(elapsed);
             crate::common::validate_error_rate(&summary);
+            let rctx = ReportContext {
+                client: &client,
+                base_url: &args.report_url,
+                route: &args.route,
+            };
             reporter::report_results_with_snapshots(
-                "graphql-update", elapsed, &summary, &snapshots, args.vus,
+                &rctx, "graphql-update", elapsed, &summary, &snapshots, args.vus,
             ).await;
 
             write_phase(&args, "cleaning");
