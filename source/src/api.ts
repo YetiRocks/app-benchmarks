@@ -1,4 +1,4 @@
-const BASE = RESOURCE_ROUTE;
+const BASE = '/api';
 
 export async function api(path: string, options?: RequestInit): Promise<Response> {
   const url = `${BASE}${path}`;

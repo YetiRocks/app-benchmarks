@@ -1,49 +1,31 @@
-import { readFileSync } from 'fs'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-/** Derive RESOURCE_ROUTE and STATIC_ROUTE from ../config.yaml so that
- *  `npm run build` and `npx vite` work without yeti injecting env vars.
- *  Env vars set by yeti's Rust launcher or CI still take precedence. */
-function loadYetiRoutes() {
-  if (process.env.RESOURCE_ROUTE && process.env.STATIC_ROUTE) {
-    return { RESOURCE_ROUTE: process.env.RESOURCE_ROUTE, STATIC_ROUTE: process.env.STATIC_ROUTE }
-  }
-  const yaml = readFileSync('../config.yaml', 'utf8')
-  const appId = yaml.match(/^app_id:\s*"?([^"\s]+)"?/m)?.[1] ?? ''
-  const resourcesBlock = yaml.match(/^resources:\s*\n((?:\s+.+\n?)*)/m)?.[1] ?? ''
-  const resRoute = resourcesBlock.match(/^\s+route:\s*"?([^"\s]+)"?/m)?.[1] ?? '/'
+const STATIC_ROOT = '/app-benchmarks'
+const RESOURCES_ROOT = 'api'
 
-  let isRoot = false
-  try {
-    const global = readFileSync('../../../yeti-config.yaml', 'utf8')
-    const rootApp = global.match(/^root_app:\s*"?([^"\s]+)"?/m)?.[1]
-    isRoot = rootApp === appId
-  } catch (_) { /* no yeti-config.yaml — use prefix */ }
-
-  const prefix = isRoot ? '' : `/${appId}`
-  const STATIC_ROUTE = `${prefix}/`
-  const RESOURCE_ROUTE = resRoute === '/' ? (prefix || '/') : `${prefix}${resRoute}`
-  return { RESOURCE_ROUTE, STATIC_ROUTE }
-}
-
-const routes = loadYetiRoutes()
+const __dir = dirname(fileURLToPath(import.meta.url))
+const yetiYaml = readFileSync(resolve(__dir, '../../../yeti-config.yaml'), 'utf-8')
+const YETI_PORT = parseInt(yetiYaml.match(/^port:\s*(\d+)/m)?.[1] ?? '9996', 10)
 
 export default defineConfig({
-  base: routes.STATIC_ROUTE,
+  base: `${STATIC_ROOT}/`,
   define: {
-    RESOURCE_ROUTE: JSON.stringify(routes.RESOURCE_ROUTE),
-    STATIC_ROUTE: JSON.stringify(routes.STATIC_ROUTE),
+    __STATIC_ROOT__: JSON.stringify(STATIC_ROOT),
+    __RESOURCES_ROOT__: JSON.stringify(RESOURCES_ROOT),
   },
-  plugins: [react()],
-  build: { outDir: '../web', emptyOutDir: true },
   server: {
     proxy: {
-      [routes.RESOURCE_ROUTE]: {
-        target: 'https://localhost:9996',
+      [`${STATIC_ROOT}/${RESOURCES_ROOT}`]: {
+        target: `https://localhost:${YETI_PORT}`,
         changeOrigin: true,
         secure: false,
       },
     },
   },
+  plugins: [react()],
+  build: { outDir: '../web', emptyOutDir: true },
 })

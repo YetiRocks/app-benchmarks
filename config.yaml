@@ -6,18 +6,18 @@ required_roles: [yeti_admin]
 
 static:
   path: web
-  route: /
+  root: /
   spa: true
   build:
     source: source
-    command: npm run build
+    command: npm install && npm run build
 
 schemas:
   path: schema.graphql
 
 resources:
   path: "resources/*.rs"
-  route: /api
+  root: /api
 
 binaries:
   - "bin/*.rs"

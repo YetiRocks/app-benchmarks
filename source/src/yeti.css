@@ -107,7 +107,7 @@ body {
 
 .nav-logo {
   height: 40px;
-  aspect-ratio: 684.5 / 269.55;
+  width: auto;
   transform: translateY(3px);
 }
 
@@ -206,7 +206,7 @@ body {
 
 .logo {
   height: 40px;
-  aspect-ratio: 684.5 / 269.55;
+  width: auto;
 }
 
 .header-title {

@@ -1,3 +1,4 @@
 /// <reference types="vite/client" />
-declare const RESOURCE_ROUTE: string
-declare const STATIC_ROUTE: string
+
+declare const __STATIC_ROOT__: string
+declare const __RESOURCES_ROOT__: string
