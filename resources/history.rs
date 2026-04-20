@@ -11,7 +11,7 @@ resource!(History {
     get(ctx) => {
         let test_name = ctx.require_id()?;
 
-        let runs = match ctx.get_table("TestRun") {
+        let runs = match ctx.table("TestRun") {
             Ok(table) => table.get_all().await.unwrap_or_default(),
             Err(_) => Vec::new(),
         };
