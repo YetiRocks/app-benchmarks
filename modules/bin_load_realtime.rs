@@ -69,7 +69,7 @@ impl ConnectionTracker {
 // At ~2500 conn/sec the server stays stable on typical hardware.
 const MAX_CONNECTIONS_PER_SEC: u64 = 1000;
 const BATCH_SIZE: u64 = 100;
-const BATCH_DELAY_MS: u64 = (1000 * BATCH_SIZE / MAX_CONNECTIONS_PER_SEC);
+const BATCH_DELAY_MS: u64 = 1000 * BATCH_SIZE / MAX_CONNECTIONS_PER_SEC;
 
 /// Check if the system can handle more connections.
 /// Returns false if failure rate is too high or we're running low on resources.

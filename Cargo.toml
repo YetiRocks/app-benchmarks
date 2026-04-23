@@ -1,0 +1,44 @@
+[package]
+name = "app-benchmarks"
+edition = "2024"
+description = "Yeti Benchmarks"
+version = "0.1.0"
+
+[package.metadata.app]
+customer_id = "yeti"
+required_roles = ["yeti_admin"]
+schemas = "schema.graphql"
+modules = "modules/*.rs"
+binaries = "bin/*.rs"
+resources = "resources/*.rs"
+static = { path = "web", root = "/", source = "source", spa = true, build = "npm install && npm run build" }
+loaders = { auth = "auth/roles.json" }
+
+[package.metadata.auth]
+allow_signup = true
+default_role = "yeti_admin"
+
+[package.metadata.auth.oauth]
+enabled = true
+providers = [
+  { name = "google", client_id = "${GOOGLE_CLIENT_ID}", client_secret = "${GOOGLE_CLIENT_SECRET}" },
+]
+rules = [
+  { strategy = "email", pattern = "*@yetirocks.com", role = "yeti_admin" },
+]
+
+[dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "process", "io-util", "fs", "net"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "charset", "http2", "json"] }
+tracing = "0.1"
+clap = { version = "4", features = ["derive"] }
+hdrhistogram = "7"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+rand = "0.9"
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+futures = "0.3"
+rumqttc = "0.24"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+libc = "0.2"
