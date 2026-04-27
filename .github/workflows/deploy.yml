@@ -4,12 +4,11 @@ name: Deploy
 # role gate, oauth-only, internal yetirocks.com email policy). Deploys
 # solo (no autoLoad bundle) via the unified yeti-app-deploy.yml.
 #
-# - push to main → real deploy
-# - PR opened → dry_run: true (build + package + artifact upload, no
-#   scp). Catches build / route-conflict / package-size regressions
-#   on every PR with zero prod risk.
-# - workflow_dispatch defaults to a real deploy; toggle `dry_run: true`
-#   from the Actions UI to force dry-run on demand.
+# SAFETY GATE — DRY-RUN IS DEFAULT (temporary):
+# Until the new yeti binary is published to Linode + the unified
+# pipeline is verified end-to-end, every trigger defaults to dry-run.
+# Real deploys require explicit `workflow_dispatch` with
+# `dry_run: false` from the Actions UI.
 
 on:
   push:
@@ -18,9 +17,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build + package only; skip scp + systemd restart"
+        description: "Build + package only; skip scp + systemd restart. Default true while the safety gate is on."
         type: boolean
-        default: false
+        default: true
 
 jobs:
   deploy:
@@ -28,5 +27,5 @@ jobs:
     with:
       service_name: yeti-benchmarks
       service_description: "Yeti Application Platform (app-benchmarks)"
-      dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run == true }}
+      dry_run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != false }}
     secrets: inherit
