@@ -2,12 +2,25 @@ name: Deploy
 
 # app-benchmarks is the internal benchmarking dashboard (yeti_admin
 # role gate, oauth-only, internal yetirocks.com email policy). Deploys
-# solo (no autoLoad bundle) via the unified yeti-app-deploy.yml@main.
+# solo (no autoLoad bundle) via the unified yeti-app-deploy.yml.
+#
+# - push to main → real deploy
+# - PR opened → dry_run: true (build + package + artifact upload, no
+#   scp). Catches build / route-conflict / package-size regressions
+#   on every PR with zero prod risk.
+# - workflow_dispatch defaults to a real deploy; toggle `dry_run: true`
+#   from the Actions UI to force dry-run on demand.
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build + package only; skip scp + systemd restart"
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -15,4 +28,5 @@ jobs:
     with:
       service_name: yeti-benchmarks
       service_description: "Yeti Application Platform (app-benchmarks)"
+      dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run == true }}
     secrets: inherit
