@@ -11,7 +11,7 @@ on:
 
 jobs:
   deploy:
-    uses: YetiRocks/yeti/.github/workflows/yeti-app-deploy.yml@main
+    uses: YetiRocks/yeti-workflows/.github/workflows/yeti-app-deploy.yml@main
     with:
       service_name: yeti-benchmarks
       service_description: "Yeti Application Platform (app-benchmarks)"
