@@ -1,0 +1,18 @@
+name: Deploy
+
+# app-benchmarks is the internal benchmarking dashboard (yeti_admin
+# role gate, oauth-only, internal yetirocks.com email policy). Deploys
+# solo (no autoLoad bundle) via the unified yeti-app-deploy.yml@main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: YetiRocks/yeti/.github/workflows/yeti-app-deploy.yml@main
+    with:
+      service_name: yeti-benchmarks
+      service_description: "Yeti Application Platform (app-benchmarks)"
+    secrets: inherit
