@@ -7,3 +7,4 @@ target/
 /target/
 /Cargo.lock
 /web/
+.DS_Store
