@@ -34,11 +34,8 @@ html, body, #root { height: 100%; margin: 0; }
 .benchmarks-content .metrics-grid.bench-grid { padding: 0; overflow: visible; flex: none; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 
 /* Sections */
-.bench-section { margin-bottom: var(--space-8); }
 .bench-section:last-child { margin-bottom: 0; }
-.bench-section-header { margin-bottom: var(--space-4); }
 .bench-section-label { font-size: var(--font-size-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-white); margin-bottom: var(--space-1); }
-.bench-section-desc { font-size: var(--font-size-xs); color: var(--color-grey); }
 .bench-error { padding: var(--space-2) var(--space-4); margin-bottom: var(--space-4); background: rgba(187, 33, 36, 0.15); border: 1px solid var(--color-error); border-radius: var(--radius-sm); color: var(--color-error); font-size: var(--font-size-sm); }
 
 /* Test cards */
@@ -55,7 +52,6 @@ html, body, #root { height: 100%; margin: 0; }
 .bench-timer-seeding { color: var(--color-info, #60a5fa); }
 .bench-timer-warming { color: var(--color-warning); }
 .bench-timer-cleaning { color: var(--color-muted, #9ca3af); }
-.bench-timer-overdue { color: var(--color-error); }
 .bench-spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: bench-spin 0.8s linear infinite; }
 @keyframes bench-spin { to { transform: rotate(360deg); } }
 
