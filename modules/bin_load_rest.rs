@@ -273,6 +273,62 @@ pub async fn run(args: BenchArgs) {
             )
             .await;
         },
+        "rest-write-multi" => {
+            // Round-robin single-record writes across N tables to test whether
+            // the rest-write throughput ceiling is per-TABLE contention (gain ≈ N×)
+            // vs per-database/per-shard contention (gain < 2×).
+            // All 5 tables share the same shape (id/title/price/authorId) and live
+            // in the same `app-benchmarks` database.
+            const TABLES: &[&str] = &[
+                "WriteBook", "ReadBook", "UpdateBook", "JoinBook", "BatchWriteBook",
+            ];
+            write_phase(&args, "seeding");
+            tracing::info!("Clearing {} tables...", TABLES.len());
+            clear_tables(&client, args.primary_url(), "app-benchmarks", &args.route, TABLES).await;
+
+            write_phase(&args, "warming");
+            let route = args.route.clone();
+            let scenario = move |ctx: Arc<runner::ScenarioContext>| {
+                let route = route.clone();
+                async move {
+                    let i = ctx.next_request_idx() as usize;
+                    let table = TABLES[i % TABLES.len()];
+                    let id = Uuid::new_v4().to_string();
+                    let body = serde_json::json!({
+                        "id": id,
+                        "title": format!("MT Book {}", &id[..8]),
+                        "price": 9.99,
+                        "authorId": "bench-author-1",
+                    });
+                    let url = if route.is_empty() {
+                        format!("{}/app-benchmarks/{}/", ctx.base_url, table)
+                    } else {
+                        format!("{}/app-benchmarks/{}/{}/", ctx.base_url, route, table)
+                    };
+                    let start = std::time::Instant::now();
+                    let result = ctx.client.post(&url).json(&body).send().await;
+                    ctx.record_response(start, result).await;
+                }
+            };
+
+            let (metrics, elapsed, snapshots): (_, _, Vec<_>) = runner::run_load_test(
+                args.vus, duration, warmup,
+                LoadTestConfig { client: client.clone(), base_url: args.base_url.clone() },
+                scenario,
+            ).await;
+
+            let summary = metrics.summary(elapsed);
+            validate_error_rate(&summary);
+            let rctx = ReportContext {
+                client: &client, base_url: &args.report_url, route: &args.route,
+            };
+            reporter::report_results_with_snapshots(
+                &rctx, "rest-write-multi", elapsed, &summary, &snapshots, args.vus,
+            ).await;
+
+            write_phase(&args, "cleaning");
+            clear_tables(&client, args.primary_url(), "app-benchmarks", &args.route, TABLES).await;
+        },
         "rest-batch-write" => {
             let book_table = "BatchWriteBook";
             write_phase(&args, "seeding");
