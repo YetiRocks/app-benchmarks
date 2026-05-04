@@ -19,8 +19,13 @@ import CodeMirror, {
   type Extension,
   type ReactCodeMirrorProps,
 } from "@uiw/react-codemirror";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import {
+  HighlightStyle,
+  StreamLanguage,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
+import { toml as tomlMode } from "@codemirror/legacy-modes/mode/toml";
 import { json } from "@codemirror/lang-json";
 import { graphql } from "cm6-graphql";
 import { yaml } from "@codemirror/lang-yaml";
@@ -249,8 +254,9 @@ function languageExtension(lang: string | undefined): Extension[] {
       return [json()];
     case "yaml":
     case "yml":
-    case "toml":
       return [yaml()];
+    case "toml":
+      return [StreamLanguage.define(tomlMode)];
     case "sql":
       return [sql()];
     case "rust":

@@ -715,22 +715,27 @@ code {
   gap: var(--space-6);
 }
 
-/*
- * Each feature-card uses subgrid so its children share row tracks with
- * sibling cards in the same row. Up to 5 children per card (icon, title,
- * text, code, optional trailing note) get assigned to rows 1..5; cards
- * with fewer children leave the extra rows empty. Effect: across a pair
- * of cards in the same row, the icons line up, the titles line up, the
- * code blocks line up — even when the descriptive text varies in length.
- */
+.features-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .feature-card {
-  display: grid;
-  grid-template-rows: subgrid;
-  grid-row: span 5;
+  display: flex;
+  flex-direction: column;
   padding: var(--space-8);
   background: var(--color-black-overlay);
   border: none;
   border-radius: var(--radius-lg);
+
+  /* When a card contains a code sample, opt into subgrid so its rows
+     (icon, title, text, code, optional trailing note) share tracks with
+     sibling .has-code cards in the same grid row. Effect: paired code
+     samples top-align even when the prose above them differs in length. */
+  &.has-code {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 5;
+  }
 }
 
 .feature-title {
