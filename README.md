@@ -427,58 +427,39 @@ The shared `modules/metrics.rs` module provides the instrumentation layer used b
 
 ## Configuration
 
-### config.yaml
+### Cargo.toml
 
-```yaml
-name: "Yeti Benchmarks"
-app_id: "app-benchmarks"
-version: "0.1.0"
-customer_id: "yeti"
-required_roles: [yeti_admin]
+App configuration lives under `[package.metadata.app]` in `Cargo.toml` (no more `config.yaml` / `services.yaml`):
 
-static:
-  path: web
-  route: /
-  spa: true
-  build:
-    source: source
-    command: npm run build
+```toml
+[package.metadata.app]
+schemas = "schema.graphql"
+resources = "resources/*.rs"
+binaries = "bin/*.rs"
+modules = "modules/*.rs"
+static = { path = "web", source = "source", spa = true, build = "npm install && npm run build" }
 
-schemas:
-  path: schema.graphql
+[package.metadata.auth]
+default_role = "yeti_admin"
 
-resources:
-  path: "resources/*.rs"
-  route: /api
-
-binaries:
-  - "bin/*.rs"
-
-modules:
-  - "modules/*.rs"
-
-auth:
-  methods: [oauth]
-  oauth:
-    google:
-      clientId: "${GOOGLE_CLIENT_ID}"
-      clientSecret: "${GOOGLE_CLIENT_SECRET}"
-    rules:
-      - strategy: email
-        pattern: "*@yetirocks.com"
-        role: yeti_admin
+[package.metadata.auth.oauth]
+providers = [
+  { name = "google", client_id = "${GOOGLE_CLIENT_ID}", client_secret = "${GOOGLE_CLIENT_SECRET}" },
+]
+rules = [
+  { strategy = "email", pattern = "*@yetirocks.com", role = "yeti_admin" },
+]
 ```
 
 ### Key configuration details
 
 | Key | Value | Description |
 |-----|-------|-------------|
-| `required_roles` | `[yeti_admin]` | Restricts access to users with the yeti_admin role |
-| `static_files.spa` | `true` | Serves the React dashboard as a single-page application |
-| `static_files.build` | `npm run build` | Builds the Vite+React dashboard from source |
+| `static.spa` | `true` | Serves the React dashboard as a single-page application |
+| `static.build` | `npm install && npm run build` | Builds the Vite+React dashboard from source |
 | `binaries` | `bin/*.rs` | Compiles load test binaries alongside the plugin |
 | `modules` | `modules/*.rs` | Shared code (metrics) available to both resources and binaries |
-| `auth.methods` | `[oauth]` | OAuth-only authentication via Google |
+| `[package.metadata.auth.oauth]` | Google provider | OAuth authentication via Google |
 | `auth.oauth.rules` | email pattern match | Maps `*@yetirocks.com` to `yeti_admin` role |
 
 ### Environment variables
@@ -493,12 +474,14 @@ auth:
 
 ## Authentication
 
-app-benchmarks uses yeti's built-in auth system with OAuth (Google) and role-based access:
+app-benchmarks uses yeti's built-in auth system with OAuth (Google) and role-based access. All auth wiring lives under `[package.metadata.auth]` in `Cargo.toml` -- see the Configuration section above.
 
-- **Required role:** `yeti_admin` -- all endpoints require this role
+- **Default role:** `yeti_admin` -- all endpoints require this role
 - **OAuth rule:** Email addresses matching `*@yetirocks.com` are mapped to the `yeti_admin` role
 - **Public table access:** All workload tables (ReadBook, WriteBook, etc.) declare `public: [read, create, update, delete]` so load test binaries can access them without authentication
 - **TestRun table:** Also publicly accessible so binaries can write results directly
+
+**Frontend gate:** the dashboard ships with a configurable `src/pages/Login.tsx` and a `src/hooks/useAuth.ts` hook. `useAuth` returns `null` while loading, `false` when a sign-in is required, and `true` once authenticated (or unconditionally if yeti-auth has no providers configured -- so the gate is a no-op in open dev installs). `App.tsx` calls `useAuth()` and renders `<Login/>` when it returns `false`.
 
 In development mode, the role requirement is bypassed for the dashboard and resource endpoints, but the OAuth configuration is still active.
 
@@ -508,7 +491,7 @@ In development mode, the role requirement is bypassed for the dashboard and reso
 
 ```
 app-benchmarks/
-├── config.yaml              # App configuration
+├── Cargo.toml               # App + [package.metadata.app] manifest
 ├── schema.graphql           # 20 tables: TestRun + isolated workload tables
 ├── resources/
 │   ├── benchmark_runner.rs  # Orchestration: spawn binaries, track state
@@ -522,14 +505,20 @@ app-benchmarks/
 │   └── load_blob.rs         # Large object retrieval generator
 ├── modules/
 │   └── metrics.rs           # HdrHistogram, snapshots, warmup gating
-└── source/                  # React + Vite dashboard source
+└── source/                  # React + Vite dashboard source (one-page model)
     ├── src/
-    │   ├── App.tsx           # Main dashboard layout
-    │   ├── api.ts            # API client
-    │   ├── types.ts          # TypeScript type definitions
+    │   ├── App.tsx           # Thin shell — auth gate + dashboard layout
     │   ├── main.tsx          # Entry point
-    │   └── components/
-    │       └── BenchmarkChart.tsx  # Time-series chart component
+    │   ├── api.ts            # Fetch helpers
+    │   ├── types.ts          # Shared TypeScript types
+    │   ├── utils.ts          # Pure helpers (formatters, etc.)
+    │   ├── components/       # Reusable UI (BenchmarkChart, etc.)
+    │   ├── hooks/            # React hooks (includes useAuth.ts)
+    │   ├── pages/            # Page components (includes Login.tsx)
+    │   └── styles/
+    │       ├── _vars.css     # Per-app brand tokens
+    │       ├── yeti.css      # Canonical Yeti stylesheet
+    │       └── index.css     # App-specific overrides
     ├── index.html
     ├── package.json
     └── vite.config.ts
