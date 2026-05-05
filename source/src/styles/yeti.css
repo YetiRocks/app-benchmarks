@@ -710,11 +710,13 @@ code {
 /* ── Feature Cards ── */
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   grid-auto-rows: auto;
   gap: var(--space-6);
 }
 
+/* Legacy modifier — kept as a no-op since the default is 3 columns now.
+   Remove existing usages opportunistically. */
 .features-grid-3 {
   grid-template-columns: repeat(3, 1fr);
 }
@@ -727,15 +729,43 @@ code {
   border: none;
   border-radius: var(--radius-lg);
 
-  /* When a card contains a code sample, opt into subgrid so its rows
-     (icon, title, text, code, optional trailing note) share tracks with
-     sibling .has-code cards in the same grid row. Effect: paired code
-     samples top-align even when the prose above them differs in length. */
+  /* Code-bearing cards span every column so the snippet has room to
+     breathe. Layout stays a flex column; no subgrid math needed. */
   &.has-code {
-    display: grid;
-    grid-template-rows: subgrid;
-    grid-row: span 5;
+    grid-column: 1 / -1;
   }
+}
+
+/* Responsive: drop to 2 then 1 column at narrower viewports. */
+@media (max-width: 960px) {
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.directive-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  line-height: 1;
+}
+
+.directive-name {
+  display: inline-block;
+  font-size: var(--font-size-xl);
+  font-weight: 500;
+  line-height: 1;
+  padding: 0;
+  background: transparent;
+  color: var(--color-primary);
+  transform: translateY(-8px);
 }
 
 .feature-title {
@@ -965,6 +995,15 @@ code {
     white-space: pre-wrap;
     word-wrap: break-word;
   }
+}
+
+/* One-liner caption that sits between a section description and a CodeBlock,
+   telling the reader what the snippet is. */
+.code-caption {
+  margin: calc(var(--space-2) * -1) 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-grey);
+  font-style: italic;
 }
 
 .code-label {
