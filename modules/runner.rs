@@ -251,9 +251,14 @@ impl ScenarioContext {
         }
     }
 
-    /// Record a batch HTTP response as N individual records.
-    /// Latency is divided by batch_size (amortized per-record cost).
-    /// Total/throughput counts each record in the batch.
+    /// Record a batch HTTP response carrying N individual records.
+    ///
+    /// Records ONE histogram entry per batch with the per-record amortized
+    /// latency, but bumps `total_records` by `batch_size`. This keeps
+    /// records/sec throughput comparable across batch and non-batch tests
+    /// without producing a per-second RPS spike that inflates CV
+    /// (the previous per-record loop logged 100 events at the response
+    /// instant, making per-second snapshots wildly bursty).
     pub async fn record_batch_response(
         &self,
         start: std::time::Instant,
@@ -266,11 +271,9 @@ impl ScenarioContext {
                 let bytes = resp.bytes().await.map(|b| b.len() as u64).unwrap_or(0);
                 let latency = start.elapsed().as_micros() as u64;
                 if status.is_success() {
-                    let per_record_latency = latency / batch_size;
-                    let per_record_bytes = bytes / batch_size;
-                    for _ in 0..batch_size {
-                        self.metrics.record_success(per_record_latency, per_record_bytes);
-                    }
+                    let per_record_latency = latency / batch_size.max(1);
+                    self.metrics
+                        .record_batch_success(per_record_latency, bytes, batch_size);
                 } else {
                     self.metrics.record_error();
                 }

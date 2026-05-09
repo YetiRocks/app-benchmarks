@@ -971,6 +971,7 @@ code {
   position: relative;
   display: flex;
   flex-direction: column;
+  width: 100%;
   margin: 0;
   padding: var(--space-6);
   overflow-x: auto;

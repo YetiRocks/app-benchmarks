@@ -65,6 +65,62 @@ impl ConnectionTracker {
     }
 }
 
+/// Spawn N publisher tasks that POST messages to `pub_url` as fast as
+/// possible. Centralizes the publish loop that fan-out tests (WS, SSE, MQTT)
+/// previously duplicated four ways. Single source of truth for:
+///   - success-only counting (`on_publish` only on 2xx)
+///   - warmup-window exclusion (no `on_publish` while `metrics.is_warming()`)
+///   - cheap body construction (pre-built JSON template + per-publisher
+///     atomic counter; no UUID gen, no serde_json::to_vec per iteration)
+///
+/// `content` is interpolated into a fixed template once per publisher.
+fn run_publishers(
+    num_publishers: usize,
+    client: reqwest::Client,
+    pub_url: String,
+    metrics: Arc<Metrics>,
+    tracker: Arc<ConnectionTracker>,
+    stop: Arc<AtomicBool>,
+    content: &'static str,
+) -> Vec<tokio::task::JoinHandle<()>> {
+    let mut handles = Vec::with_capacity(num_publishers);
+    for pub_idx in 0..num_publishers {
+        let client = client.clone();
+        let url = pub_url.clone();
+        let metrics = metrics.clone();
+        let tracker = tracker.clone();
+        let stop = stop.clone();
+        // Pre-build the body fragments around the per-message id. Each
+        // iteration only formats a 16-hex counter into a small fixed-size
+        // string — much cheaper than Uuid::new_v4 + serde_json::to_vec.
+        let prefix = format!(r#"{{"id":"bench-{:04x}-"#, pub_idx);
+        let suffix = format!(r#"","title":"bench","content":"{}"}}"#, content);
+        handles.push(tokio::spawn(async move {
+            let mut counter: u64 = 0;
+            while !stop.load(Ordering::Relaxed) {
+                counter = counter.wrapping_add(1);
+                let body = format!("{prefix}{counter:016x}{suffix}");
+                let resp = client
+                    .post(&url)
+                    .header("content-type", "application/json")
+                    .body(body)
+                    .send()
+                    .await;
+                // Only count publishes that (a) the server actually accepted
+                // and (b) happened during the measurement window. Failed POSTs
+                // and warmup-window publishes used to be counted unconditionally,
+                // inflating `expected = peak * published` and the loss% headline.
+                if !metrics.is_warming()
+                    && matches!(&resp, Ok(r) if r.status().is_success())
+                {
+                    tracker.on_publish();
+                }
+            }
+        }));
+    }
+    handles
+}
+
 // Ramp rate: max connections per second to avoid overwhelming TLS handshake capacity.
 // At ~2500 conn/sec the server stays stable on typical hardware.
 const MAX_CONNECTIONS_PER_SEC: u64 = 1000;
@@ -346,29 +402,20 @@ async fn run_ws_test(
     // Publish as fast as possible to measure max fan-out throughput.
     // 4 concurrent publishers to saturate the server's write path.
     let num_publishers = 4;
-    let mut pub_handles = Vec::new();
     let pub_url = if args.route.is_empty() {
         format!("{}/app-benchmarks/{}", args.primary_url(), message_table)
     } else {
         format!("{}/app-benchmarks/{}/{}", args.primary_url(), args.route, message_table)
     };
-    for _ in 0..num_publishers {
-        let pub_client = client.clone();
-        let pub_stop = stop.clone();
-        let pub_tracker = tracker.clone();
-        let pub_url = pub_url.clone();
-        pub_handles.push(tokio::spawn(async move {
-            while !pub_stop.load(Ordering::Relaxed) {
-                let body = serde_json::json!({
-                    "id": Uuid::new_v4().to_string(),
-                    "title": "bench",
-                    "content": "benchmark message",
-                });
-                let _ = pub_client.post(&pub_url).json(&body).send().await;
-                pub_tracker.on_publish();
-            }
-        }));
-    }
+    let pub_handles = run_publishers(
+        num_publishers,
+        client.clone(),
+        pub_url,
+        metrics.clone(),
+        tracker.clone(),
+        stop.clone(),
+        "benchmark message",
+    );
 
     if !warmup.is_zero() {
         tracing::info!("Warmup: {}s (metrics discarded)...", warmup.as_secs());
@@ -655,29 +702,20 @@ async fn run_sse_test(
 
     // Publish as fast as possible to measure max fan-out throughput
     let num_publishers = 4;
-    let mut pub_handles = Vec::new();
     let pub_url = if args.route.is_empty() {
         format!("{}/app-benchmarks/{}", args.primary_url(), message_table)
     } else {
         format!("{}/app-benchmarks/{}/{}", args.primary_url(), args.route, message_table)
     };
-    for _ in 0..num_publishers {
-        let pub_client = client.clone();
-        let pub_stop = stop.clone();
-        let pub_tracker = tracker.clone();
-        let pub_url = pub_url.clone();
-        pub_handles.push(tokio::spawn(async move {
-            while !pub_stop.load(Ordering::Relaxed) {
-                let body = serde_json::json!({
-                    "id": Uuid::new_v4().to_string(),
-                    "title": "bench",
-                    "content": "benchmark sse message",
-                });
-                let _ = pub_client.post(&pub_url).json(&body).send().await;
-                pub_tracker.on_publish();
-            }
-        }));
-    }
+    let pub_handles = run_publishers(
+        num_publishers,
+        client.clone(),
+        pub_url,
+        metrics.clone(),
+        tracker.clone(),
+        stop.clone(),
+        "benchmark sse message",
+    );
 
     if !warmup.is_zero() {
         tracing::info!("Warmup: {}s (metrics discarded)...", warmup.as_secs());
@@ -893,9 +931,16 @@ async fn run_ws_publish_test(
                         .await
                     {
                         Ok(_) => {
-                            let latency_us = start.elapsed().as_micros() as u64;
-                            m.record_success(latency_us, msg.to_string().len() as u64);
-                            t.on_publish();
+                            // Skip the on_publish bump during warmup so it
+                            // matches record_success's own warming filter —
+                            // otherwise `published` includes warmup-window
+                            // sends but `total` doesn't, asymmetrically
+                            // inflating the loss-rate denominator.
+                            if !m.is_warming() {
+                                let latency_us = start.elapsed().as_micros() as u64;
+                                m.record_success(latency_us, msg.to_string().len() as u64);
+                                t.on_publish();
+                            }
                         },
                         Err(_) => {
                             m.record_error();
@@ -1134,29 +1179,20 @@ async fn run_mqtt_test(
 
     // Publish via REST → MQTT bridge (table writes trigger MQTT notifications)
     let num_publishers = 4;
-    let mut pub_handles = Vec::new();
     let pub_url = if args.route.is_empty() {
         format!("{}/app-benchmarks/{}", args.primary_url(), message_table)
     } else {
         format!("{}/app-benchmarks/{}/{}", args.primary_url(), args.route, message_table)
     };
-    for _ in 0..num_publishers {
-        let pub_client = client.clone();
-        let pub_stop = stop.clone();
-        let pub_tracker = tracker.clone();
-        let pub_url = pub_url.clone();
-        pub_handles.push(tokio::spawn(async move {
-            while !pub_stop.load(Ordering::Relaxed) {
-                let body = serde_json::json!({
-                    "id": Uuid::new_v4().to_string(),
-                    "title": "bench",
-                    "content": "mqtt benchmark message",
-                });
-                let _ = pub_client.post(&pub_url).json(&body).send().await;
-                pub_tracker.on_publish();
-            }
-        }));
-    }
+    let pub_handles = run_publishers(
+        num_publishers,
+        client.clone(),
+        pub_url,
+        metrics.clone(),
+        tracker.clone(),
+        stop.clone(),
+        "mqtt benchmark message",
+    );
 
     if !warmup.is_zero() {
         tracing::info!("Warmup: {}s (metrics discarded)...", warmup.as_secs());
