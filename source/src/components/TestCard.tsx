@@ -3,6 +3,9 @@ import { formatNumber, formatMs } from '../utils'
 
 interface TestCardProps {
   test: TestDef
+  /** Fallback when `test.vus` is absent. The bestresults API only
+   * sends `vus` for tests that override the platform default. */
+  defaultVus: number
   latest?: LatestResult
   phase: string
   isDisabled: boolean
@@ -24,7 +27,7 @@ function ListIcon() {
   )
 }
 
-export function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedSecs, configuredDuration, onRun, onOpenHistory }: TestCardProps) {
+export function TestCard({ test, defaultVus, latest, phase, isDisabled, warmupSecs, elapsedSecs, configuredDuration, onRun, onOpenHistory }: TestCardProps) {
   const results = latest?.results
   const hasData = !!(results && results.throughput)
   const isRealtimeTest = test.binary === 'load-realtime' && test.id !== 'ws-publish'
@@ -52,7 +55,7 @@ export function TestCard({ test, latest, phase, isDisabled, warmupSecs, elapsedS
       <div className="bench-card-stats">
         <div className="bench-stat">
           <span className="bench-stat-value">
-            {hasData && results!.peakConnections != null ? formatNumber(results!.peakConnections!) : formatNumber(test.vus)}
+            {hasData && results!.peakConnections != null ? formatNumber(results!.peakConnections!) : formatNumber(test.vus ?? defaultVus)}
           </span>
           <span className="bench-stat-label">VUS</span>
         </div>

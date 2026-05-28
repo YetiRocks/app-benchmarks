@@ -1,0 +1,299 @@
+/*
+ * login.css — canonical Yeti shared stylesheet for the LoginPage component.
+ *
+ * Source of truth: ~/yeti/shared-components/login.css
+ * Synced to each app at: source/src/styles/login.css
+ * Run ../shared-components/sync.sh to refresh after edits.
+ *
+ * Each app must:
+ *   1. Provide CSS custom properties used here in their styles/_vars.css —
+ *      --color-black, --color-black-overlay, --color-white, --color-grey,
+ *      --color-primary, --color-error, --color-border-primary,
+ *      --color-white-overlay, --space-{2,3,4,6,8}, --radius-{sm,md,lg},
+ *      --font-size-{xs,sm}, --font-weight-medium, --font-family-base,
+ *      --transition-fast.
+ *   2. Import this file from index.css (or main.tsx) AFTER their base
+ *      stylesheet so login styles win the cascade.
+ *
+ * Class contract — kept stable so the canonical LoginPage.tsx works
+ * unchanged:
+ *   .login-page, .login-card, .login-logo, .login-tabs, .login-tab,
+ *   .login-tab.active, .login-divider, .login-error, .login-submit,
+ *   .btn-oauth (scoped under .login-card).
+ */
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-4);
+  background: var(--color-black);
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-8);
+  border-radius: var(--radius-lg);
+}
+
+.login-logo-link {
+  display: block;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+
+.login-logo {
+  display: block;
+  width: 100%;
+}
+
+.login-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+
+.login-tab {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: -1px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-grey);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.login-tab.active {
+  color: var(--color-white);
+  border-bottom-color: var(--color-primary);
+}
+
+.login-tab:hover:not(.active) {
+  color: var(--color-white);
+}
+
+.login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.login-card input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.login-card input:focus {
+  border-color: var(--color-primary);
+}
+
+.login-card input::placeholder {
+  color: var(--color-grey);
+}
+
+.login-card .btn-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(36, 41, 46, 0.5);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.login-card .btn-oauth:hover {
+  background: var(--color-white-overlay);
+  transform: translateY(-1px);
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  color: var(--color-grey);
+  font-size: var(--font-size-xs);
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--color-border-primary);
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.login-submit:disabled {
+  cursor: default;
+}
+
+.login-error {
+  padding: var(--space-2) 0;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Single-line magic-link entry: input grows, square button on the right.
+ * Bootstrap-style "input-group". */
+.login-input-group {
+  display: flex;
+  flex-direction: row !important;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+}
+
+.login-input-group input {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.login-input-group button {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  color: var(--color-white);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.login-input-group button:hover:not(:disabled) {
+  background: var(--color-primary-light, var(--color-primary));
+}
+
+.login-input-group button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.login-meta-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.login-helper {
+  width: 100%;
+  color: var(--color-grey);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Plain horizontal rule — used above any below-form message (callout,
+ * error, helper) to visually separate it from the auth controls. */
+.login-rule {
+  width: 100%;
+  height: 0;
+  border-top: 1px solid var(--color-border-primary);
+}
+
+/* Below-form message container. Reserves at least three lines' height
+ * so the card doesn't collapse when copy is short and doesn't reflow
+ * when copy switches between states. Sets the baseline message size
+ * for everything inside. */
+.login-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 4.5em;
+  padding: var(--space-2) var(--space-1, 0);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Pre-auth waitlist callout — beneath the auth controls. */
+.login-callout {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-white-overlay);
+  border-radius: var(--radius-md);
+  color: var(--color-grey);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Post-auth state messaging — magic-link sent, waitlist thank-you, etc. */
+.login-success {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-white-overlay);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.login-success p {
+  margin: 0 0 var(--space-2) 0;
+}
+
+.login-success p:last-child {
+  margin-bottom: 0;
+}
+
+.login-banner-error {
+  width: 100%;
+  max-width: 400px;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 64, 64, 0.08);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}

@@ -7,6 +7,7 @@ import { formatNumber, formatMs, formatDate } from '../utils'
 
 export default function Benchmarks() {
   const [testMap, setTestMap] = useState<Record<string, TestDef & { best?: Record<string, unknown> }>>({})
+  const [defaultVus, setDefaultVus] = useState<number>(100)
   const [categories, setCategories] = useState<CategoryDef[]>([])
   const [runner, setRunner] = useState<RunnerState>({ status: 'idle' })
   const [historyModal, setHistoryModal] = useState<{ testId: string; testName: string; isRealtimeTest: boolean } | null>(null)
@@ -33,6 +34,7 @@ export default function Benchmarks() {
       if (resp.ok) {
         const data = await resp.json()
         setTestMap(data.tests || {})
+        if (typeof data.defaultVus === 'number') setDefaultVus(data.defaultVus)
         if (data.categories?.length) setCategories(data.categories)
       }
     } catch { /* Server may not be ready */ }
@@ -187,7 +189,7 @@ export default function Benchmarks() {
                   const isThisTest = runningTest === test.id
                   const best = test.best as LatestResult['results'] | undefined
                   return (
-                    <TestCard key={test.id} test={test} latest={best ? { name: test.id, throughput: 0, run: {}, results: best } : undefined}
+                    <TestCard key={test.id} test={test} defaultVus={defaultVus} latest={best ? { name: test.id, throughput: 0, run: {}, results: best } : undefined}
                       phase={isThisTest ? (runner.phase ?? runner.status) : 'idle'}
                       isDisabled={isBusy && !isThisTest}
                       warmupSecs={isThisTest ? (runner.warmupSecs ?? 0) : 0}

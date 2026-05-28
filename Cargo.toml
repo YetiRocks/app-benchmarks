@@ -1,32 +1,30 @@
 [package]
 name = "app-benchmarks"
 edition = "2024"
-description = "Yeti Benchmarks"
-version = "0.1.0"
+description = "Yeti benchmark runner (wasm) — orchestrates load-test subprocesses via yeti:process/spawner"
+version = "1.0.0"
 
 [package.metadata.app]
 customer_id = "yeti"
-schemas = "schema.graphql"
-modules = "modules/*.rs"
-binaries = "bin/*.rs"
+schemas = "schemas/benchmarks.graphql"
 resources = "resources/*.rs"
+# Dashboard React app. Build output lives in `web/`; the Vite
+# source under `source/` is what generates it (`npm run build`).
+# The yeti runtime serves files from `web/` at the app's root path.
 static = { path = "web", root = "/", source = "source", spa = true, build = "npm install && npm run build" }
 
+# Subprocess spawn allowlist. Without this block the host's
+# yeti:process/spawner returns Forbidden for every spawn call —
+# the wasm app would have a Runner resource that always errors.
+# These names match the [[bin]] targets in the platform's
+# yeti-benchmarks crate; the host resolves them sibling-of-yeti.
+[package.metadata.app.process]
+allow = [
+  "load-rest",
+  "load-graphql",
+  "load-realtime",
+  "load-vector",
+  "load-blob",
+]
+
 [dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "process", "io-util", "fs", "net"] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "charset", "http2", "json", "stream"] }
-tracing = "0.1"
-clap = { version = "4", features = ["derive"] }
-hdrhistogram = "7"
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1", features = ["v4"] }
-rand = "0.9"
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
-futures = "0.3"
-rumqttc = "0.24"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-libc = "0.2"
-base64 = "0.22"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"

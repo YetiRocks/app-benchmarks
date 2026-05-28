@@ -5,7 +5,10 @@ export interface TestDef {
   name: string
   binary: string
   duration: number
-  vus: number
+  /** Absent = use the response's top-level `defaultVus`. The
+   * bestresults API only sends `vus` for tests that explicitly
+   * override the platform default. */
+  vus?: number
   category: string
 }
 
