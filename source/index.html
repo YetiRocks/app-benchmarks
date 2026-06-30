@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Yeti runtime base: the web server injects window.__YETI_BASE_PATH for
+         the deployment mount (right after <head>); derive the no-trailing-slash
+         static root before any module evaluates. Absent (npm run dev) -> "/". -->
+    <script>window.__YETI_STATIC_ROOT__=(window.__YETI_BASE_PATH||'/').replace(/\/$/,'');</script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
