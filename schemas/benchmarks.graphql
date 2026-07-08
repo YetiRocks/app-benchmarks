@@ -1,4 +1,4 @@
-type TestRun @table(database: "app-benchmarks") @export(mqtt: false) @access(public: [read, create, update, delete]) {
+type TestRun @table(database: "app-benchmarks") @distribute @export(mqtt: false) @access(public: [read, create, update, delete]) {
     id: ID!
     testName: String! @indexed
     timestamp: String!
