@@ -130,8 +130,15 @@ resource!(Runner {
                 "--test".into(), test.clone(),
                 "--duration".into(), duration.to_string(),
                 "--vus".into(), total_vus.to_string(),
-                "--base-url".into(), target_url,
-                "--report-url".into(), "https://localhost".into(),
+                "--base-url".into(), target_url.clone(),
+                // Report to the same node the test ran against. The load
+                // binary's reporter POSTs the TestRun row to this URL, and
+                // the runner's completion detection reads that row back from
+                // the table. A hardcoded `https://localhost` (no port) only
+                // resolves on the default :443 node and leaves any other-port
+                // node stuck in "seeding" forever, so carry the caller's
+                // target URL through verbatim.
+                "--report-url".into(), target_url,
                 "--warmup".into(), "5".into(),
             ],
             env: Vec::new(),
