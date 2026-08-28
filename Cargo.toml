@@ -5,7 +5,7 @@ description = "Yeti benchmark runner (wasm) — orchestrates load-test subproces
 version = "1.0.0"
 
 [package.metadata.app]
-customer_id = "yeti"
+account_id = "yeti"
 schemas = "schemas/benchmarks.graphql"
 resources = "resources/*.rs"
 # Dashboard React app. Build output lives in `web/`; the Vite
