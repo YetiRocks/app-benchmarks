@@ -9,3 +9,7 @@ target/
 /web/
 .DS_Store
 auth/
+
+# Runtime output, not source (deployment mirror + build cache).
+/deployments/
+/cache/
