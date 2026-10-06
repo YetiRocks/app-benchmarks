@@ -207,6 +207,32 @@ code {
   display: none;
 }
 
+/* Phone width: the 32px side padding and the 100px nav-right floor left the
+ * title ~50px between the logo and the GitHub icon, so it broke into two or
+ * three ragged lines (some spilling above the bar) and pushed the icon off
+ * screen. Below 600px the bar tightens and the title keeps one centred line. */
+@media (max-width: 600px) {
+  .nav {
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
+  }
+  .nav-logo {
+    height: 32px;
+  }
+  .nav-right {
+    min-width: 0;
+  }
+  .nav-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--font-size-base);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 /* ── Header (legacy 73px) ── */
 .header {
   display: flex;
