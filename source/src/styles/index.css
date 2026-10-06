@@ -82,3 +82,17 @@ html, body, #root { height: 100%; margin: 0; }
 @media (max-width: 900px) { .benchmarks-content .bench-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); } .bench-card-stats { flex-wrap: wrap; gap: var(--space-2); } }
 @media (max-width: 600px) { .benchmarks-content .bench-grid { grid-template-columns: 1fr; max-width: none; } .bench-modal-body .data-table th:nth-child(3), .bench-modal-body .data-table td:nth-child(3), .bench-modal-body .data-table th:nth-child(5), .bench-modal-body .data-table td:nth-child(5) { display: none; } }
 
+
+/* Phone width: the toolbar is one 51px flex row holding the results count, a
+ * 320px target-URL field and Delete All, so below 600px the count squeezed to
+ * a word per line and the field and Delete All ran off the right edge. Here
+ * the row wraps: the count and Delete All share the first line, and the URL
+ * field takes the full second line. */
+@media (max-width: 600px) {
+  .benchmarks-panel > .panel-header { flex-wrap: wrap; gap: var(--space-2); height: auto; min-height: 51px; padding-block: var(--space-2); }
+  .benchmarks-panel .target-form-group { order: 1; flex: 1 1 100%; margin: 0; }
+  .target-form-group .target-input { flex: 1; width: auto; min-width: 0; }
+  /* The 32px side gutters left a 256px column at 320, narrower than a test
+   * card's stats row, so cards overran the right gutter to the screen edge. */
+  .benchmarks-content { padding: var(--space-4); }
+}
