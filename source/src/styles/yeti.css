@@ -270,6 +270,19 @@ code {
   color: var(--color-white);
 }
 
+/* Phone width: the footer's text and links are flex items, so a narrow row
+ * squeezes each into its own ragged column. Below 600px it flows as one
+ * centred paragraph instead, wrapping between words, with height to fit. */
+@media (max-width: 600px) {
+  .footer {
+    display: block;
+    height: auto;
+    padding: var(--space-4);
+    line-height: 1.6;
+    text-align: center;
+  }
+}
+
 /* ── Subnav ── */
 .subnav-link {
   &:hover,
