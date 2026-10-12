@@ -13,3 +13,4 @@ auth/
 # Runtime output, not source (deployment mirror + build cache).
 /deployments/
 /cache/
+.yeti-build/
