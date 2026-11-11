@@ -1,0 +1,160 @@
+[
+  {
+    "id": "app-benchmarks:seeder",
+    "name": "Benchmark reset (delete only)",
+    "appId": "app-benchmarks",
+    "permission": {
+      "super_user": false,
+      "databases": {
+        "app-benchmarks": {
+          "tables": {
+            "ReadBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "ReadAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "WriteBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "WriteAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "UpdateBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "UpdateAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "JoinBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "JoinAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlReadBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlReadAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlWriteBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlWriteAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlUpdateBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlJoinBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlJoinAuthor": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "BatchWriteBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "GqlBatchWriteBook": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "EmbedArticle": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "SearchArticle": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "BlobData": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "WsMessage": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "SseMessage": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "WsPublishMessage": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            },
+            "MqttMessage": {
+              "read": false,
+              "insert": false,
+              "update": false,
+              "delete": true
+            }
+          }
+        }
+      }
+    }
+  }
+]

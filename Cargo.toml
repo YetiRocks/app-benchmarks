@@ -7,5 +7,8 @@ version = "1.0.0"
 [package.metadata.app]
 account_id = "yeti"
 schemas = "schemas/benchmarks.graphql"
+# The role `yeti bench` clears these tables as on a cluster, where the
+# deployment child refuses the operator's token (ADR-054).
+loaders = { auth = ["auth/roles.json"] }
 
 [dependencies]
