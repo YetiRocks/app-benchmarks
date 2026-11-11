@@ -1,30 +1,11 @@
 [package]
 name = "app-benchmarks"
 edition = "2024"
-description = "Yeti benchmark runner (wasm) — orchestrates load-test subprocesses via yeti:process/spawner"
+description = "Yeti benchmark target: the tables yeti's load-test binaries seed, clear and drive"
 version = "1.0.0"
 
 [package.metadata.app]
 account_id = "yeti"
 schemas = "schemas/benchmarks.graphql"
-resources = "resources/*.rs"
-# Dashboard React app. Build output lives in `web/`; the Vite
-# source under `source/` is what generates it (`npm run build`).
-# The yeti runtime serves files from `web/` at the app's root path.
-static = { path = "web", root = "/", source = "source", spa = true, build = "npm install && npm run build" }
-
-# Subprocess spawn allowlist. Without this block the host's
-# yeti:process/spawner returns Forbidden for every spawn call —
-# the wasm app would have a Runner resource that always errors.
-# These names match the [[bin]] targets in the platform's
-# yeti-benchmarks crate; the host resolves them sibling-of-yeti.
-[package.metadata.app.process]
-allow = [
-  "load-rest",
-  "load-graphql",
-  "load-realtime",
-  "load-vector",
-  "load-blob",
-]
 
 [dependencies]
