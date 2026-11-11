@@ -1,3 +1,4 @@
+# Result rows the load binaries post under --report-url and prune afterwards.
 type TestRun @table(database: "app-benchmarks") @distribute @export(mqtt: false) @access(public: [read, create, update, delete]) {
     id: ID!
     testName: String! @indexed
@@ -65,6 +66,10 @@ type GqlReadBook @table(database: "app-benchmarks") @export(mqtt: false) @access
     price: Float
     authorId: ID!
 }
+type GqlReadAuthor @table(database: "app-benchmarks") @export(mqtt: false) @access(public: [read, create, update, delete]) {
+    id: ID!
+    name: String!
+}
 
 # ── GraphQL Write tables ──
 type GqlWriteBook @table(database: "app-benchmarks") @export(mqtt: false) @access(public: [read, create, update, delete]) {
@@ -72,6 +77,10 @@ type GqlWriteBook @table(database: "app-benchmarks") @export(mqtt: false) @acces
     title: String!
     price: Float
     authorId: ID!
+}
+type GqlWriteAuthor @table(database: "app-benchmarks") @export(mqtt: false) @access(public: [read, create, update, delete]) {
+    id: ID!
+    name: String!
 }
 
 # ── GraphQL Update tables ──
